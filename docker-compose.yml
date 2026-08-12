@@ -1,0 +1,21 @@
+# Fireplace — PostgreSQL for local development
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: fireplace
+      POSTGRES_PASSWORD: fireplace
+      POSTGRES_DB: fireplace
+    volumes:
+      - fireplace_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fireplace -d fireplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fireplace_pg:
