@@ -1,0 +1,11 @@
+# Option A — with a domain (HTTPS auto):
+yourdomain.com {
+	encode gzip
+	reverse_proxy app:3000
+}
+
+# Option B — IP only (HTTP). Comment Option A and uncomment:
+# :80 {
+# 	encode gzip
+# 	reverse_proxy app:3000
+# }

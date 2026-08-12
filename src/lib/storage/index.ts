@@ -17,11 +17,14 @@ const MAX_BYTES = Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024);
 
 function getAdapter(): StorageAdapter {
   const driver = process.env.STORAGE_DRIVER ?? "local";
+  // Vercel’s filesystem is ephemeral — use /tmp for MVP free hosting.
+  const defaultPath = process.env.VERCEL
+    ? "/tmp/fireplace-storage"
+    : "./storage";
   if (driver === "local") {
-    return createLocalStorage(process.env.STORAGE_LOCAL_PATH ?? "./storage");
+    return createLocalStorage(process.env.STORAGE_LOCAL_PATH ?? defaultPath);
   }
-  // Production: plug S3-compatible adapter here without changing callers.
-  return createLocalStorage(process.env.STORAGE_LOCAL_PATH ?? "./storage");
+  return createLocalStorage(process.env.STORAGE_LOCAL_PATH ?? defaultPath);
 }
 
 export const storage = getAdapter();

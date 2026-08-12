@@ -6,7 +6,7 @@
   "description": "Fireplace — Layoff Support & Opportunity Community",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
