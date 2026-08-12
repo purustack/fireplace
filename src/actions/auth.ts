@@ -13,6 +13,28 @@ export type ActionResult<T = void> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
 
+function isNextRedirect(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+function dbErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/DATABASE_URL|Can't reach|P1001|P1017|timeout|ECONNREFUSED/i.test(message)) {
+    return "Database connection failed. Check DATABASE_URL on Vercel.";
+  }
+  if (/Unique constraint|P2002/i.test(message)) {
+    return "An account with this email already exists.";
+  }
+  console.error("[Fireplace] DB/auth error:", error);
+  return "Something went wrong creating your account. Please try again.";
+}
+
 export async function registerUser(formData: FormData): Promise<ActionResult<{ email: string }>> {
   const parsed = signUpSchema.safeParse({
     name: formData.get("name"),
@@ -32,58 +54,70 @@ export async function registerUser(formData: FormData): Promise<ActionResult<{ e
     return { ok: false, error: "Too many signup attempts. Try again later." };
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { ok: false, error: "An account with this email already exists." };
-  }
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return { ok: false, error: "An account with this email already exists." };
+    }
 
-  const passwordHash = await hashPassword(parsed.data.password);
-  const base = usernameFromName(parsed.data.name);
-  let username = base;
-  let i = 0;
-  while (await prisma.profile.findUnique({ where: { username } })) {
-    i += 1;
-    username = `${base}-${i}`;
-  }
+    const passwordHash = await hashPassword(parsed.data.password);
+    const base = usernameFromName(parsed.data.name);
+    let username = base;
+    let i = 0;
+    while (await prisma.profile.findUnique({ where: { username } })) {
+      i += 1;
+      username = `${base}-${i}`;
+    }
 
-  await prisma.user.create({
-    data: {
-      email,
-      name: parsed.data.name,
-      passwordHash,
-      roles: [Role.USER],
-      emailVerified: new Date(),
-      onboardingStep: 2,
-      profile: {
-        create: {
-          username,
-          city: parsed.data.city,
-          country: parsed.data.country,
-          profileCompleteness: 15,
+    await prisma.user.create({
+      data: {
+        email,
+        name: parsed.data.name,
+        passwordHash,
+        roles: [Role.USER],
+        emailVerified: new Date(),
+        onboardingStep: 2,
+        profile: {
+          create: {
+            username,
+            city: parsed.data.city,
+            country: parsed.data.country,
+            profileCompleteness: 15,
+          },
+        },
+        verification: {
+          create: {
+            personalEmailVerified: true,
+          },
         },
       },
-      verification: {
-        create: {
-          personalEmailVerified: true,
-        },
-      },
-    },
-  });
+    });
+  } catch (error) {
+    return { ok: false, error: dbErrorMessage(error) };
+  }
 
   try {
+    // redirectTo sets the session cookie via Next.js redirect (required on Vercel).
     await signIn("credentials", {
       email,
       password: parsed.data.password,
-      redirect: false,
+      redirectTo: "/onboarding/professional",
     });
+    return { ok: true, data: { email } };
   } catch (error) {
+    if (isNextRedirect(error)) throw error;
     if (error instanceof AuthError) {
-      return { ok: false, error: "Account created but sign-in failed. Please log in." };
+      return {
+        ok: false,
+        error: "Account created but sign-in failed. Please log in.",
+      };
     }
-    throw error;
+    console.error("[Fireplace] signIn after register:", error);
+    return {
+      ok: false,
+      error: "Account created but sign-in failed. Please log in.",
+    };
   }
-
-  return { ok: true, data: { email } };
 }
 
 export async function loginUser(formData: FormData): Promise<ActionResult> {
@@ -100,13 +134,19 @@ export async function loginUser(formData: FormData): Promise<ActionResult> {
   }
 
   try {
-    await signIn("credentials", { email, password, redirect: false });
+    await signIn("credentials", {
+      email,
+      password,
+      redirectTo: "/app/dashboard",
+    });
     return { ok: true };
   } catch (error) {
+    if (isNextRedirect(error)) throw error;
     if (error instanceof AuthError) {
       return { ok: false, error: "Invalid email or password." };
     }
-    throw error;
+    console.error("[Fireplace] login error:", error);
+    return { ok: false, error: "Sign-in failed. Please try again." };
   }
 }
 

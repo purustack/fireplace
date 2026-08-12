@@ -99,24 +99,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       if (token.sub) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.sub },
-          select: {
-            roles: true,
-            accountStatus: true,
-            onboardingStep: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        });
-        if (dbUser) {
-          token.roles = dbUser.roles;
-          token.accountStatus = dbUser.accountStatus;
-          token.onboardingStep = dbUser.onboardingStep;
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.picture = dbUser.image;
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: {
+              roles: true,
+              accountStatus: true,
+              onboardingStep: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          });
+          if (dbUser) {
+            token.roles = dbUser.roles;
+            token.accountStatus = dbUser.accountStatus;
+            token.onboardingStep = dbUser.onboardingStep;
+            token.name = dbUser.name;
+            token.email = dbUser.email;
+            token.picture = dbUser.image;
+          }
+        } catch (error) {
+          console.error("[Fireplace] jwt callback DB error:", error);
         }
       }
 
@@ -137,4 +141,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   trustHost: true,
+  secret: process.env.AUTH_SECRET,
 });

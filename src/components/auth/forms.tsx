@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { loginUser, registerUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/input";
@@ -11,7 +10,6 @@ import { SearchableSelect } from "@/components/ui/multi-select";
 import { COUNTRIES, MAJOR_CITIES } from "@/lib/onboarding-options";
 
 export function LoginForm() {
-  const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
 
@@ -23,9 +21,12 @@ export function LoginForm() {
         className="mt-6 space-y-4"
         action={(fd) => {
           start(async () => {
-            const res = await loginUser(fd);
-            if (!res.ok) setError(res.error);
-            else router.push("/app/dashboard");
+            try {
+              const res = await loginUser(fd);
+              if (!res.ok) setError(res.error);
+            } catch {
+              // Next.js redirect / navigation — ignore
+            }
           });
         }}
       >
@@ -60,7 +61,6 @@ export function LoginForm() {
 }
 
 export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
-  const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
   const [country, setCountry] = useState("India");
@@ -82,9 +82,13 @@ export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
               setError("Please select city and country.");
               return;
             }
-            const res = await registerUser(fd);
-            if (!res.ok) setError(res.error);
-            else router.push("/onboarding/professional");
+            try {
+              const res = await registerUser(fd);
+              if (!res.ok) setError(res.error);
+              // Success navigates via Auth.js redirectTo
+            } catch {
+              // Next.js redirect / navigation — ignore
+            }
           });
         }}
       >
