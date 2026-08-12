@@ -1,6 +1,7 @@
 "use server";
 
 import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
 import { signIn, signOut } from "@/lib/auth";
@@ -33,6 +34,30 @@ function dbErrorMessage(error: unknown): string {
   }
   console.error("[Fireplace] DB/auth error:", error);
   return "Something went wrong creating your account. Please try again.";
+}
+
+async function establishSession(email: string, password: string): Promise<ActionResult> {
+  try {
+    // redirect:false avoids Auth.js POSTing the Server Action to the destination URL.
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (result && typeof result === "object" && "error" in result && result.error) {
+      return { ok: false, error: "Invalid email or password." };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    if (isNextRedirect(error)) throw error;
+    if (error instanceof AuthError) {
+      return { ok: false, error: "Invalid email or password." };
+    }
+    console.error("[Fireplace] signIn error:", error);
+    return { ok: false, error: "Sign-in failed. Please try again." };
+  }
 }
 
 export async function registerUser(formData: FormData): Promise<ActionResult<{ email: string }>> {
@@ -96,28 +121,15 @@ export async function registerUser(formData: FormData): Promise<ActionResult<{ e
     return { ok: false, error: dbErrorMessage(error) };
   }
 
-  try {
-    // redirectTo sets the session cookie via Next.js redirect (required on Vercel).
-    await signIn("credentials", {
-      email,
-      password: parsed.data.password,
-      redirectTo: "/onboarding/professional",
-    });
-    return { ok: true, data: { email } };
-  } catch (error) {
-    if (isNextRedirect(error)) throw error;
-    if (error instanceof AuthError) {
-      return {
-        ok: false,
-        error: "Account created but sign-in failed. Please log in.",
-      };
-    }
-    console.error("[Fireplace] signIn after register:", error);
+  const session = await establishSession(email, parsed.data.password);
+  if (!session.ok) {
     return {
       ok: false,
       error: "Account created but sign-in failed. Please log in.",
     };
   }
+
+  redirect("/onboarding/professional");
 }
 
 export async function loginUser(formData: FormData): Promise<ActionResult> {
@@ -133,21 +145,28 @@ export async function loginUser(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "Too many login attempts. Try again later." };
   }
 
-  try {
-    await signIn("credentials", {
-      email,
-      password,
-      redirectTo: "/app/dashboard",
-    });
-    return { ok: true };
-  } catch (error) {
-    if (isNextRedirect(error)) throw error;
-    if (error instanceof AuthError) {
-      return { ok: false, error: "Invalid email or password." };
-    }
-    console.error("[Fireplace] login error:", error);
-    return { ok: false, error: "Sign-in failed. Please try again." };
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { onboardingStep: true, passwordHash: true },
+  });
+  if (!user?.passwordHash) {
+    return { ok: false, error: "Invalid email or password." };
   }
+
+  const session = await establishSession(email, password);
+  if (!session.ok) return session;
+
+  if (user.onboardingStep < 4) {
+    const step =
+      user.onboardingStep <= 2
+        ? "/onboarding/professional"
+        : user.onboardingStep === 3
+          ? "/onboarding/layoff"
+          : "/onboarding/verification";
+    redirect(step);
+  }
+
+  redirect("/app/dashboard");
 }
 
 export async function logoutUser() {
