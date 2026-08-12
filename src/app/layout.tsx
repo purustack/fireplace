@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
+import { AuthSessionProvider } from "@/components/providers/session-provider";
 import "./globals.css";
 
 const display = Fraunces({
@@ -30,7 +31,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <AuthSessionProvider>{children}</AuthSessionProvider>
+      </body>
     </html>
   );
 }

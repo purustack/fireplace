@@ -1,10 +1,8 @@
 "use server";
 
-import { AuthError } from "next-auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
-import { signIn, signOut } from "@/lib/auth";
+import { signOut } from "@/lib/auth";
 import { signUpSchema } from "@/lib/validations";
 import { usernameFromName } from "@/lib/utils";
 import { rateLimit } from "@/lib/rate-limit";
@@ -13,16 +11,6 @@ import { Role } from "@prisma/client";
 export type ActionResult<T = void> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
-
-function isNextRedirect(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "digest" in error &&
-    typeof (error as { digest: unknown }).digest === "string" &&
-    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
-  );
-}
 
 function dbErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,30 +24,7 @@ function dbErrorMessage(error: unknown): string {
   return "Something went wrong creating your account. Please try again.";
 }
 
-async function establishSession(email: string, password: string): Promise<ActionResult> {
-  try {
-    // redirect:false avoids Auth.js POSTing the Server Action to the destination URL.
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-
-    if (result && typeof result === "object" && "error" in result && result.error) {
-      return { ok: false, error: "Invalid email or password." };
-    }
-
-    return { ok: true };
-  } catch (error) {
-    if (isNextRedirect(error)) throw error;
-    if (error instanceof AuthError) {
-      return { ok: false, error: "Invalid email or password." };
-    }
-    console.error("[Fireplace] signIn error:", error);
-    return { ok: false, error: "Sign-in failed. Please try again." };
-  }
-}
-
+/** Creates the account only — client calls next-auth/react signIn afterward. */
 export async function registerUser(formData: FormData): Promise<ActionResult<{ email: string }>> {
   const parsed = signUpSchema.safeParse({
     name: formData.get("name"),
@@ -117,56 +82,11 @@ export async function registerUser(formData: FormData): Promise<ActionResult<{ e
         },
       },
     });
+
+    return { ok: true, data: { email } };
   } catch (error) {
     return { ok: false, error: dbErrorMessage(error) };
   }
-
-  const session = await establishSession(email, parsed.data.password);
-  if (!session.ok) {
-    return {
-      ok: false,
-      error: "Account created but sign-in failed. Please log in.",
-    };
-  }
-
-  redirect("/onboarding/professional");
-}
-
-export async function loginUser(formData: FormData): Promise<ActionResult> {
-  const email = String(formData.get("email") ?? "").toLowerCase();
-  const password = String(formData.get("password") ?? "");
-
-  if (!email || password.length < 8) {
-    return { ok: false, error: "Enter a valid email and password." };
-  }
-
-  const limit = rateLimit(`login:${email}`, 10, 15 * 60 * 1000);
-  if (!limit.ok) {
-    return { ok: false, error: "Too many login attempts. Try again later." };
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { onboardingStep: true, passwordHash: true },
-  });
-  if (!user?.passwordHash) {
-    return { ok: false, error: "Invalid email or password." };
-  }
-
-  const session = await establishSession(email, password);
-  if (!session.ok) return session;
-
-  if (user.onboardingStep < 4) {
-    const step =
-      user.onboardingStep <= 2
-        ? "/onboarding/professional"
-        : user.onboardingStep === 3
-          ? "/onboarding/layoff"
-          : "/onboarding/verification";
-    redirect(step);
-  }
-
-  redirect("/app/dashboard");
 }
 
 export async function logoutUser() {

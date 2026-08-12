@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { loginUser, registerUser } from "@/actions/auth";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { registerUser } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -10,6 +12,7 @@ import { SearchableSelect } from "@/components/ui/multi-select";
 import { COUNTRIES, MAJOR_CITIES } from "@/lib/onboarding-options";
 
 export function LoginForm() {
+  const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
 
@@ -19,14 +22,24 @@ export function LoginForm() {
       <p className="mt-2 text-sm text-ash">Log in to continue rebuilding.</p>
       <form
         className="mt-6 space-y-4"
-        action={(fd) => {
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const email = String(fd.get("email") ?? "").toLowerCase();
+          const password = String(fd.get("password") ?? "");
           start(async () => {
-            try {
-              const res = await loginUser(fd);
-              if (!res.ok) setError(res.error);
-            } catch {
-              // Next.js redirect / navigation — ignore
+            setError(undefined);
+            const res = await signIn("credentials", {
+              email,
+              password,
+              redirect: false,
+            });
+            if (res?.error) {
+              setError("Invalid email or password.");
+              return;
             }
+            router.replace("/app/dashboard");
+            router.refresh();
           });
         }}
       >
@@ -46,7 +59,7 @@ export function LoginForm() {
           />
         </div>
         <FieldError>{error}</FieldError>
-        <Button className="w-full" disabled={pending}>
+        <Button className="w-full" disabled={pending} type="submit">
           {pending ? "Signing in…" : "Log in"}
         </Button>
       </form>
@@ -61,6 +74,7 @@ export function LoginForm() {
 }
 
 export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
+  const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
   const [country, setCountry] = useState("India");
@@ -76,19 +90,33 @@ export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
       </p>
       <form
         className="mt-6 space-y-4"
-        action={(fd) => {
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!country || !city) {
+            setError("Please select city and country.");
+            return;
+          }
+          const fd = new FormData(e.currentTarget);
+          const email = String(fd.get("email") ?? "").toLowerCase();
+          const password = String(fd.get("password") ?? "");
           start(async () => {
-            if (!country || !city) {
-              setError("Please select city and country.");
+            setError(undefined);
+            const created = await registerUser(fd);
+            if (!created.ok) {
+              setError(created.error);
               return;
             }
-            try {
-              const res = await registerUser(fd);
-              if (!res.ok) setError(res.error);
-              // Success navigates via Auth.js redirectTo
-            } catch {
-              // Next.js redirect / navigation — ignore
+            const res = await signIn("credentials", {
+              email,
+              password,
+              redirect: false,
+            });
+            if (res?.error) {
+              setError("Account created but sign-in failed. Please log in.");
+              return;
             }
+            router.replace("/onboarding/professional");
+            router.refresh();
           });
         }}
       >
@@ -125,7 +153,7 @@ export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
           />
         </div>
         <FieldError>{error}</FieldError>
-        <Button className="w-full" disabled={pending}>
+        <Button className="w-full" disabled={pending} type="submit">
           {pending ? "Creating…" : "Create account"}
         </Button>
       </form>

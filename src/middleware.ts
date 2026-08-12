@@ -9,9 +9,11 @@ export async function middleware(req: NextRequest) {
   const needsAuth = protectedPrefixes.some((p) => pathname.startsWith(p));
   if (!needsAuth) return NextResponse.next();
 
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
   const token = await getToken({
     req,
-    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+    secret,
+    secureCookie: process.env.NODE_ENV === "production",
   });
 
   if (!token) {
