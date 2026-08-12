@@ -27,6 +27,14 @@ declare module "next-auth" {
   }
 }
 
+const authSecret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+
+if (!authSecret && process.env.NODE_ENV === "production") {
+  console.error(
+    "[Fireplace] AUTH_SECRET (or NEXTAUTH_SECRET) is missing. Set it in Vercel env vars.",
+  );
+}
+
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -67,17 +75,25 @@ const providers = [
   }),
 ];
 
-if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+const googleEnabled = Boolean(
+  process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET,
+);
+
+if (googleEnabled) {
   providers.push(
     Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      clientId: process.env.AUTH_GOOGLE_ID!,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
     }) as never,
   );
 }
 
+/**
+ * Credentials + JWT does not need a DB adapter.
+ * PrismaAdapter is only used when Google OAuth account linking is enabled.
+ */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  ...(googleEnabled ? { adapter: PrismaAdapter(prisma) } : {}),
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
@@ -141,5 +157,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   trustHost: true,
-  secret: process.env.AUTH_SECRET,
+  secret: authSecret,
 });
