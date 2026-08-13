@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { createPost, addComment, toggleReaction, toggleSavePost, updateJobStatus } from "@/actions/posts";
+import {
+  createPost,
+  addComment,
+  toggleReaction,
+  toggleSavePost,
+  toggleCommentHelpful,
+  updateJobStatus,
+  listFeed,
+} from "@/actions/posts";
 import { createReport } from "@/actions/admin";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, Select, FieldError } from "@/components/ui/input";
@@ -10,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Badge, AvailabilityBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
-import { Briefcase, Heart, Bookmark, Flag, MessageCircle, ArrowUpRight, MapPin, Sparkles } from "lucide-react";
+import { Briefcase, Heart, Bookmark, Flag, MessageCircle, ArrowUpRight, MapPin, Sparkles, HandHelping } from "lucide-react";
 import type { JobPostStatus, PostCategory } from "@prisma/client";
 
 const CATEGORIES: { value: PostCategory; label: string }[] = [
@@ -46,10 +54,25 @@ type FeedPost = {
   comments: Array<{
     id: string;
     body: string;
-    author: { name: string };
+    createdAt: Date | string;
+    helpfulCount: number;
+    markedHelpful: boolean;
+    author: { id?: string; name: string; image?: string | null };
+    authorId?: string;
   }>;
   _count: { comments: number; reactions: number; savedBy: number };
 };
+
+type CategoryFilter = PostCategory | "ALL";
+
+const FEED_EVENT = "fireplace:feed";
+const POLL_MS = 4000;
+
+function notifyFeedChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(FEED_EVENT));
+  }
+}
 
 function jobMetaFields(meta: unknown) {
   if (!meta || typeof meta !== "object") return null;
@@ -87,6 +110,7 @@ export function CreatePostForm() {
             else {
               setError(undefined);
               (document.getElementById("create-post-form") as HTMLFormElement | null)?.reset();
+              notifyFeedChanged();
             }
           });
         }}
@@ -133,25 +157,93 @@ export function CreatePostForm() {
 }
 
 export function FeedList({
-  posts,
+  posts: initialPosts,
   currentUserId,
 }: {
   posts: FeedPost[];
   currentUserId: string;
 }) {
   const [pending, start] = useTransition();
+  const [category, setCategory] = useState<CategoryFilter>("ALL");
+  const [posts, setPosts] = useState(initialPosts);
 
-  if (posts.length === 0) {
-    return (
-      <Card className="py-14 text-center">
-        <p className="font-display text-2xl text-coal">The hearth is quiet</p>
-        <p className="mt-2 text-ash">Be the first to share an opportunity or discussion.</p>
-      </Card>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refresh() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const next = await listFeed(
+          category === "ALL" ? undefined : { category },
+        );
+        if (!cancelled) setPosts(next);
+      } catch {
+        /* ignore network blips */
+      }
+    }
+
+    refresh();
+    const timer = window.setInterval(refresh, POLL_MS);
+    const onFocus = () => refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener(FEED_EVENT, onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(FEED_EVENT, onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [category]);
 
   return (
     <div className="space-y-5">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <button
+          type="button"
+          onClick={() => setCategory("ALL")}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+            category === "ALL"
+              ? "bg-ember text-warm-white shadow-sm"
+              : "bg-parchment text-ash hover:bg-ember-soft hover:text-coal"
+          }`}
+        >
+          All posts
+        </button>
+        {CATEGORIES.map((c) => (
+          <button
+            key={c.value}
+            type="button"
+            onClick={() => setCategory(c.value)}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              category === c.value
+                ? "bg-ember text-warm-white shadow-sm"
+                : "bg-parchment text-ash hover:bg-ember-soft hover:text-coal"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {posts.length === 0 ? (
+        <Card className="py-14 text-center">
+          <p className="font-display text-2xl text-coal">
+            {category === "ALL" ? "The hearth is quiet" : "Nothing in this category yet"}
+          </p>
+          <p className="mt-2 text-ash">
+            {category === "ALL"
+              ? "Be the first to share an opportunity or discussion."
+              : "Try another filter, or publish the first post in this category."}
+          </p>
+        </Card>
+      ) : null}
+
       {posts.map((post) => {
         const cat = CATEGORIES.find((c) => c.value === post.category);
         const isJob = post.category === "JOB_OPPORTUNITY";
@@ -255,6 +347,7 @@ export function FeedList({
                     onChange={(e) =>
                       start(async () => {
                         await updateJobStatus(post.id, e.target.value as JobPostStatus);
+                        notifyFeedChanged();
                       })
                     }
                   >
@@ -290,7 +383,12 @@ export function FeedList({
                 size="sm"
                 variant="ghost"
                 disabled={pending}
-                onClick={() => start(async () => { await toggleReaction(post.id); })}
+                onClick={() =>
+                  start(async () => {
+                    await toggleReaction(post.id);
+                    notifyFeedChanged();
+                  })
+                }
               >
                 <Heart className="h-4 w-4" /> {post._count.reactions}
               </Button>
@@ -298,7 +396,12 @@ export function FeedList({
                 size="sm"
                 variant="ghost"
                 disabled={pending}
-                onClick={() => start(async () => { await toggleSavePost(post.id); })}
+                onClick={() =>
+                  start(async () => {
+                    await toggleSavePost(post.id);
+                    notifyFeedChanged();
+                  })
+                }
               >
                 <Bookmark className="h-4 w-4" /> {post._count.savedBy}
               </Button>
@@ -323,32 +426,177 @@ export function FeedList({
               </Button>
             </div>
 
-            <div className="mt-3 space-y-2">
-              {post.comments.map((c) => (
-                <p key={c.id} className="rounded-lg bg-parchment/80 px-3 py-2 text-sm text-ash">
-                  <span className="font-semibold text-coal">{c.author.name}</span>
-                  <span className="mx-1.5 text-smoke">·</span>
-                  {c.body}
-                </p>
-              ))}
-              <form
-                className="flex gap-2"
-                action={(fd) => {
-                  start(async () => {
-                    await addComment(fd);
-                  });
-                }}
-              >
-                <input type="hidden" name="postId" value={post.id} />
-                <Input name="body" placeholder="Add a comment…" required className="h-10" />
-                <Button size="sm" type="submit" disabled={pending}>
-                  Reply
-                </Button>
-              </form>
-            </div>
+            <CommentThread
+              postId={post.id}
+              comments={post.comments}
+              totalCount={post._count.comments}
+              currentUserId={currentUserId}
+              pending={pending}
+              onReply={start}
+            />
           </article>
         );
       })}
+    </div>
+  );
+}
+
+type CommentSort = "helpful" | "newest" | "oldest";
+type CommentFilter = "all" | "helpful";
+
+function CommentThread({
+  postId,
+  comments,
+  totalCount,
+  currentUserId,
+  pending,
+  onReply,
+}: {
+  postId: string;
+  comments: FeedPost["comments"];
+  totalCount: number;
+  currentUserId: string;
+  pending: boolean;
+  onReply: (fn: () => Promise<void>) => void;
+}) {
+  const [sort, setSort] = useState<CommentSort>("helpful");
+  const [filter, setFilter] = useState<CommentFilter>("all");
+
+  const visible = useMemo(() => {
+    const list = comments.filter((c) => (filter === "helpful" ? c.helpfulCount > 0 : true));
+    return [...list].sort((a, b) => {
+      if (sort === "helpful") {
+        if (b.helpfulCount !== a.helpfulCount) return b.helpfulCount - a.helpfulCount;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      if (sort === "newest") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [comments, sort, filter]);
+
+  const topHelpfulId =
+    sort === "helpful" ? visible.find((c) => c.helpfulCount > 0)?.id : undefined;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {comments.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                ["helpful", "Most helpful"],
+                ["newest", "Newest"],
+                ["oldest", "Oldest"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSort(value)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  sort === value
+                    ? "bg-ember text-warm-white"
+                    : "bg-parchment text-ash hover:bg-ember-soft hover:text-coal"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setFilter((f) => (f === "all" ? "helpful" : "all"))}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              filter === "helpful"
+                ? "bg-ember-soft text-ember-deep ring-1 ring-ember/30"
+                : "bg-parchment text-ash hover:text-coal"
+            }`}
+          >
+            {filter === "helpful" ? "Helpful only" : "All comments"}
+          </button>
+        </div>
+      ) : null}
+
+      {visible.map((c) => {
+        const mine = c.authorId === currentUserId;
+        return (
+          <div
+            key={c.id}
+            className={`flex items-start gap-2 rounded-lg px-3 py-2 ${
+              c.id === topHelpfulId
+                ? "bg-ember-soft/80 ring-1 ring-ember/20"
+                : "bg-parchment/80"
+            }`}
+          >
+            <Avatar name={c.author.name} image={c.author.image} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-ash">
+                <span className="font-semibold text-coal">{c.author.name}</span>
+                {c.id === topHelpfulId ? (
+                  <span className="ml-2 rounded-full bg-ember/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ember">
+                    Most helpful
+                  </span>
+                ) : null}
+                <span className="mx-1.5 text-smoke">·</span>
+                {c.body}
+              </p>
+              <button
+                type="button"
+                disabled={pending || mine}
+                title={mine ? "You can’t mark your own comment" : "Mark as helpful"}
+                onClick={() =>
+                  onReply(async () => {
+                    const res = await toggleCommentHelpful(c.id);
+                    if (res.ok) notifyFeedChanged();
+                  })
+                }
+                className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition ${
+                  c.markedHelpful
+                    ? "bg-ember text-warm-white"
+                    : "bg-warm-white text-ash hover:bg-ember-soft hover:text-ember-deep"
+                } disabled:opacity-50`}
+              >
+                <HandHelping className="h-3 w-3" />
+                Helpful{c.helpfulCount > 0 ? ` · ${c.helpfulCount}` : ""}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {filter === "helpful" && visible.length === 0 && comments.length > 0 ? (
+        <p className="text-xs text-ash">No comments marked helpful yet.</p>
+      ) : null}
+
+      {totalCount > comments.length ? (
+        <p className="text-xs text-ash">
+          Showing top {comments.length} of {totalCount} comments
+        </p>
+      ) : null}
+
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const form = e.currentTarget;
+          const fd = new FormData(form);
+          onReply(async () => {
+            const res = await addComment(fd);
+            if (res.ok) {
+              form.reset();
+              notifyFeedChanged();
+            }
+          });
+        }}
+      >
+        <input type="hidden" name="postId" value={postId} />
+        <Input name="body" placeholder="Add a comment…" required className="h-10" />
+        <Button size="sm" type="submit" disabled={pending}>
+          Reply
+        </Button>
+      </form>
     </div>
   );
 }

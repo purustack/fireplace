@@ -114,6 +114,22 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      {!profile.layoffSurveyAt ? (
+        <Card className="border-ember/25 bg-gradient-to-br from-ember-soft/50 to-warm-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember">
+            Optional · private
+          </p>
+          <h2 className="mt-1 font-display text-xl text-coal">A 2-minute layoff survey</h2>
+          <p className="mt-2 text-sm text-ash">
+            Were you expecting it? What do you think was behind it? Your answers stay private —
+            they help us support you better, not recruiters.
+          </p>
+          <Link href="/app/settings#layoff-survey" className="mt-4 inline-block">
+            <Button size="sm">Answer a few questions</Button>
+          </Link>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <h2 className="font-display text-xl">Messages & requests</h2>

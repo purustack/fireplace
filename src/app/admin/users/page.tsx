@@ -21,7 +21,9 @@ export default async function AdminUsersPage({
           ],
         }
       : undefined,
-    include: { profile: true },
+    include: {
+      profile: { omit: { layoffSurvey: true, layoffSurveyAt: true } },
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

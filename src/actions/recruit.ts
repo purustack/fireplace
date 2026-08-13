@@ -161,6 +161,7 @@ export async function searchCandidates(raw: unknown) {
           }
         : {}),
     },
+    omit: { layoffSurvey: true, layoffSurveyAt: true },
     include: {
       skills: { include: { skill: true }, take: 8 },
       user: {

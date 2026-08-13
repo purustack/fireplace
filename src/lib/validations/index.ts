@@ -23,6 +23,48 @@ export const professionalSchema = z.object({
   lookingFor: z.array(z.string().max(120)).max(10).default([]),
 });
 
+export const layoffSurveySchema = z.object({
+  expected: z.enum(["YES", "SOMEWHAT", "NO", "UNSURE"]).optional(),
+  reasons: z
+    .array(
+      z.enum([
+        "ROLE_ELIMINATED",
+        "COMPANY_FINANCES",
+        "RESTRUCTURE",
+        "INTERNAL_POLITICS",
+        "PERFORMANCE",
+        "SKILLS_GAP",
+        "PROJECT_ENDED",
+        "UNCLEAR",
+        "OTHER",
+      ]),
+    )
+    .max(9)
+    .default([]),
+  notifiedHow: z
+    .enum(["MANAGER_1ON1", "HR_CALL", "EMAIL", "MASS_MEETING", "CHAT", "OTHER"])
+    .optional(),
+  tenure: z.enum(["UNDER_1", "Y1_2", "Y3_5", "Y6_10", "OVER_10"]).optional(),
+  notice: z
+    .enum(["NONE", "UNDER_2_WEEKS", "TWO_TO_FOUR_WEEKS", "ONE_TO_TWO_MONTHS", "OVER_TWO_MONTHS"])
+    .optional(),
+  severance: z.enum(["YES", "NO", "PREFER_NOT"]).optional(),
+  supportNeeded: z
+    .array(
+      z.enum([
+        "JOB_SEARCH",
+        "RESUME",
+        "INTERVIEW_PREP",
+        "SKILLS",
+        "NETWORKING",
+        "PEER_SUPPORT",
+      ]),
+    )
+    .max(6)
+    .default([]),
+  notes: z.string().max(1000).optional(),
+});
+
 export const layoffSchema = z.discriminatedUnion("layoffStatus", [
   z.object({
     layoffStatus: z.literal("AVAILABLE_IMMEDIATELY"),

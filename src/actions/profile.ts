@@ -5,11 +5,13 @@ import { requireAuth } from "@/lib/rbac";
 import {
   professionalSchema,
   layoffSchema,
+  layoffSurveySchema,
   privacySchema,
 } from "@/lib/validations";
+import { surveyHasAnswers, type LayoffSurveyAnswers } from "@/lib/layoff-survey";
 import { slugify } from "@/lib/utils";
 import { storage, storeUpload } from "@/lib/storage";
-import { SkillType } from "@prisma/client";
+import { SkillType, type Prisma } from "@prisma/client";
 import type { ActionResult } from "./auth";
 import { revalidatePath } from "next/cache";
 
@@ -164,7 +166,54 @@ export async function saveLayoffStatus(formData: FormData): Promise<ActionResult
     data: { onboardingStep: 4 },
   });
 
+  await saveLayoffSurveyFromForm(user.id, formData);
+
   revalidatePath("/app");
+  return { ok: true };
+}
+
+function surveyPayloadFromForm(formData: FormData) {
+  return layoffSurveySchema.safeParse({
+    expected: String(formData.get("expected") ?? "") || undefined,
+    reasons: formData.getAll("reasons").map(String).filter(Boolean),
+    notifiedHow: String(formData.get("notifiedHow") ?? "") || undefined,
+    tenure: String(formData.get("tenure") ?? "") || undefined,
+    notice: String(formData.get("notice") ?? "") || undefined,
+    severance: String(formData.get("severance") ?? "") || undefined,
+    supportNeeded: formData.getAll("supportNeeded").map(String).filter(Boolean),
+    notes: String(formData.get("notes") ?? "").trim() || undefined,
+  });
+}
+
+async function saveLayoffSurveyFromForm(userId: string, formData: FormData) {
+  const parsed = surveyPayloadFromForm(formData);
+  if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Invalid survey." };
+  if (!surveyHasAnswers(parsed.data as LayoffSurveyAnswers)) {
+    return { ok: true as const };
+  }
+
+  const current = await prisma.profile.findUnique({
+    where: { userId },
+    select: { layoffSurveyAt: true },
+  });
+
+  await prisma.profile.update({
+    where: { userId },
+    data: {
+      layoffSurvey: parsed.data as Prisma.InputJsonValue,
+      layoffSurveyAt: new Date(),
+      ...(current?.layoffSurveyAt ? {} : { profileCompleteness: { increment: 8 } }),
+    },
+  });
+  return { ok: true as const };
+}
+
+export async function saveLayoffSurvey(formData: FormData): Promise<ActionResult> {
+  const user = await requireAuth();
+  const res = await saveLayoffSurveyFromForm(user.id, formData);
+  if (!res.ok) return res;
+  revalidatePath("/app/settings");
+  revalidatePath("/app/dashboard");
   return { ok: true };
 }
 
@@ -299,6 +348,7 @@ export async function updatePrivacySettings(formData: FormData): Promise<ActionR
 export async function getProfileByUsername(username: string) {
   const profile = await prisma.profile.findUnique({
     where: { username },
+    omit: { layoffSurvey: true, layoffSurveyAt: true },
     include: {
       skills: { include: { skill: true } },
       employment: { orderBy: { startDate: "desc" } },

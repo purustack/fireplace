@@ -22,6 +22,7 @@ export const metadata: Metadata = {
   },
   description:
     "A professional community for people affected by layoffs to connect, support each other, discover opportunities, and build what’s next.",
+  applicationName: "Fireplace",
 };
 
 export default function RootLayout({

@@ -111,6 +111,54 @@ export async function addComment(formData: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
+export async function toggleCommentHelpful(commentId: string): Promise<ActionResult> {
+  const user = await requireAuth();
+  const comment = await prisma.comment.findUnique({
+    where: { id: commentId },
+    select: { id: true, authorId: true, postId: true, body: true },
+  });
+  if (!comment) return { ok: false, error: "Comment not found." };
+  if (comment.authorId === user.id) {
+    return { ok: false, error: "You can’t mark your own comment as helpful." };
+  }
+
+  const existing = await prisma.commentHelpful.findUnique({
+    where: { commentId_userId: { commentId, userId: user.id } },
+  });
+
+  if (existing) {
+    await prisma.$transaction([
+      prisma.commentHelpful.delete({ where: { id: existing.id } }),
+      prisma.comment.update({
+        where: { id: commentId },
+        data: { helpfulCount: { decrement: 1 } },
+      }),
+    ]);
+  } else {
+    await prisma.$transaction([
+      prisma.commentHelpful.create({
+        data: { commentId, userId: user.id },
+      }),
+      prisma.comment.update({
+        where: { id: commentId },
+        data: { helpfulCount: { increment: 1 } },
+      }),
+    ]);
+    await prisma.notification.create({
+      data: {
+        userId: comment.authorId,
+        type: "COMMENT_HELPFUL",
+        title: "Someone found your comment helpful",
+        body: comment.body.slice(0, 120),
+        href: `/app/feed#${comment.postId}`,
+      },
+    });
+  }
+
+  revalidatePath("/app/feed");
+  return { ok: true };
+}
+
 export async function toggleReaction(postId: string): Promise<ActionResult> {
   const user = await requireAuth();
   const existing = await prisma.reaction.findUnique({
@@ -154,7 +202,7 @@ export async function toggleSavePost(postId: string): Promise<ActionResult> {
 }
 
 export async function listFeed(opts?: { category?: PostCategory; cursor?: string }) {
-  await requireAuth();
+  const user = await requireAuth();
   const posts = await prisma.post.findMany({
     where: {
       published: true,
@@ -173,10 +221,21 @@ export async function listFeed(opts?: { category?: PostCategory; cursor?: string
         },
       },
       comments: {
-        orderBy: { createdAt: "asc" },
-        take: 5,
+        orderBy: [{ helpfulCount: "desc" }, { createdAt: "desc" }],
+        take: 80,
         include: {
-          author: { select: { id: true, name: true, profile: { select: { username: true } } } },
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              profile: { select: { username: true } },
+            },
+          },
+          helpful: {
+            where: { userId: user.id },
+            select: { id: true },
+          },
         },
       },
       reactions: true,
@@ -184,5 +243,11 @@ export async function listFeed(opts?: { category?: PostCategory; cursor?: string
     },
   });
 
-  return posts;
+  return posts.map((post) => ({
+    ...post,
+    comments: post.comments.map(({ helpful, ...comment }) => ({
+      ...comment,
+      markedHelpful: helpful.length > 0,
+    })),
+  }));
 }

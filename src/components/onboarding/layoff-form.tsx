@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveLayoffStatus } from "@/actions/profile";
+import { LayoffSurveyFields } from "@/components/onboarding/layoff-survey-fields";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -95,8 +96,13 @@ export function LayoffForm() {
           </p>
         )}
 
+        <LayoffSurveyFields />
+
         <FieldError>{error}</FieldError>
         <Button disabled={pending}>{pending ? "Saving…" : "Continue"}</Button>
+        <p className="text-center text-xs text-ash">
+          The survey is optional — you can skip the questions and still continue.
+        </p>
       </form>
     </Card>
   );

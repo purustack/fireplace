@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { updatePrivacySettings } from "@/actions/profile";
 import { AvatarUploader } from "@/components/profile/avatar-uploader";
+import { LayoffSurveyForm } from "@/components/onboarding/layoff-survey-form";
+import { isLayoffSurveyAnswers } from "@/lib/layoff-survey";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label, Select } from "@/components/ui/input";
@@ -15,6 +17,8 @@ export default async function SettingsPage() {
     where: { id: session!.user.id },
     include: { profile: true },
   });
+  const rawSurvey = user.profile?.layoffSurvey;
+  const survey = isLayoffSurveyAnswers(rawSurvey) ? rawSurvey : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -74,12 +78,17 @@ export default async function SettingsPage() {
       </Card>
 
       <Card>
+        <LayoffSurveyForm initial={survey} />
+      </Card>
+
+      <Card>
         <h2 className="font-display text-xl">Never exposed by default</h2>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ash">
           <li>Password</li>
           <li>Private email & phone</li>
           <li>Uploaded verification documents</li>
           <li>Salary / severance details</li>
+          <li>Layoff survey answers</li>
         </ul>
         {user.profile ? (
           <Link

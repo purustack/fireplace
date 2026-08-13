@@ -29,6 +29,7 @@ export default async function SearchPage({
             ],
           },
           take: 12,
+          omit: { layoffSurvey: true, layoffSurveyAt: true },
           include: {
             user: { select: { name: true, showLocation: true } },
             skills: { include: { skill: true }, take: 4 },
