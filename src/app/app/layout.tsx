@@ -9,7 +9,7 @@ export default async function AppLayout({
 }) {
   const session = await auth();
   if (!session?.user) {
-    redirect("/login");
+    redirect("/");
   }
   if (session.user.onboardingStep < 4) {
     const step =

@@ -96,8 +96,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...(googleEnabled ? { adapter: PrismaAdapter(prisma) } : {}),
   session: { strategy: "jwt" },
   pages: {
-    signIn: "/login",
-    error: "/login",
+    signIn: "/",
+    error: "/",
   },
   providers,
   callbacks: {

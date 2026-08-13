@@ -63,10 +63,10 @@ export function LoginForm() {
           {pending ? "Signing in…" : "Log in"}
         </Button>
       </form>
-      <p className="mt-4 text-center text-sm text-ash">
-        New here?{" "}
-        <Link href="/register" className="font-semibold text-ember">
-          Join Fireplace
+      <p className="mt-5 text-center text-sm text-ash">
+        No account yet?{" "}
+        <Link href="/register" className="font-semibold text-ember hover:underline">
+          Create your account
         </Link>
       </p>
     </Card>
@@ -157,9 +157,9 @@ export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
           {pending ? "Creating…" : "Create account"}
         </Button>
       </form>
-      <p className="mt-4 text-center text-sm text-ash">
+      <p className="mt-5 text-center text-sm text-ash">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-ember">
+        <Link href="/" className="font-semibold text-ember hover:underline">
           Log in
         </Link>
       </p>

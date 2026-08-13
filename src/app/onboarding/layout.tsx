@@ -8,7 +8,7 @@ export default async function OnboardingLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/");
 
   return (
     <div className="bg-hearth min-h-screen px-4 py-10">
