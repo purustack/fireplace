@@ -6,11 +6,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LiveMessageBadge, MessageLiveProvider } from "@/components/messaging/live-message-badge";
 import { Role } from "@prisma/client";
-import { Flame, LayoutDashboard, Newspaper, Search, MessageCircle, Users, Settings } from "lucide-react";
+import { Flame, LayoutDashboard, Newspaper, Search, MessageCircle, Users, Settings, HeartHandshake, Hammer } from "lucide-react";
 
 const links = [
   { href: "/app/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/app/feed", label: "Feed", icon: Newspaper },
+  { href: "/app/recover", label: "Recover", icon: HeartHandshake },
+  { href: "/app/build", label: "Build", icon: Hammer },
   { href: "/app/search", label: "Search", icon: Search },
   { href: "/app/messages", label: "Messages", icon: MessageCircle },
   { href: "/app/recruit", label: "Recruit", icon: Users, roles: [Role.RECRUITER, Role.ADMIN, Role.MODERATOR] },

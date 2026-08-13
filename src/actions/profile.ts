@@ -10,6 +10,8 @@ import {
 } from "@/lib/validations";
 import { surveyHasAnswers, type LayoffSurveyAnswers } from "@/lib/layoff-survey";
 import { slugify } from "@/lib/utils";
+import { normalizeCompany } from "@/lib/company";
+import { PRIVATE_PROFILE_OMIT } from "@/lib/profile-privacy";
 import { storage, storeUpload } from "@/lib/storage";
 import { SkillType, type Prisma } from "@prisma/client";
 import type { ActionResult } from "./auth";
@@ -99,6 +101,7 @@ export async function saveProfessionalProfile(
     data: {
       jobTitle: data.jobTitle,
       previousCompany: data.previousCompany,
+      companyKey: normalizeCompany(data.previousCompany),
       yearsExperience: data.yearsExperience,
       industry: data.industry,
       preferredWorkLocation: data.preferredWorkLocation,
@@ -348,7 +351,7 @@ export async function updatePrivacySettings(formData: FormData): Promise<ActionR
 export async function getProfileByUsername(username: string) {
   const profile = await prisma.profile.findUnique({
     where: { username },
-    omit: { layoffSurvey: true, layoffSurveyAt: true },
+    omit: PRIVATE_PROFILE_OMIT,
     include: {
       skills: { include: { skill: true } },
       employment: { orderBy: { startDate: "desc" } },

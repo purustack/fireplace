@@ -13,6 +13,7 @@ import type { ActionResult } from "./auth";
 import { revalidatePath } from "next/cache";
 import { addDays } from "date-fns";
 import { hasLayoffVerifiedBadge } from "@/lib/verification-badge";
+import { PRIVATE_PROFILE_OMIT } from "@/lib/profile-privacy";
 
 export async function registerRecruiterProfile(
   formData: FormData,
@@ -161,7 +162,7 @@ export async function searchCandidates(raw: unknown) {
           }
         : {}),
     },
-    omit: { layoffSurvey: true, layoffSurveyAt: true },
+    omit: PRIVATE_PROFILE_OMIT,
     include: {
       skills: { include: { skill: true }, take: 8 },
       user: {

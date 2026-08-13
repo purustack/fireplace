@@ -5,6 +5,7 @@ import { setUserModerationStatus } from "@/actions/admin";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PRIVATE_PROFILE_OMIT } from "@/lib/profile-privacy";
 
 export default async function AdminUsersPage({
   searchParams,
@@ -22,7 +23,7 @@ export default async function AdminUsersPage({
         }
       : undefined,
     include: {
-      profile: { omit: { layoffSurvey: true, layoffSurveyAt: true } },
+      profile: { omit: PRIVATE_PROFILE_OMIT },
     },
     orderBy: { createdAt: "desc" },
     take: 50,

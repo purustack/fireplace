@@ -110,6 +110,8 @@ enum NotificationType {
   VERIFICATION_REJECTED
   REPORT_STATUS
   GROUP_ACTIVITY
+  HEARTH_JOIN
+  BUILD_INTEREST
 }
 
 enum SkillType {
@@ -193,6 +195,8 @@ model User {
   auditLogs              AuditLog[]
   groupMemberships       GroupMember[]
   startupIdeas           StartupIdea[]
+  ideaJoins              StartupCollaborator[]
+  interviewNotes         InterviewNote[]
   reviewedDocuments      VerificationDocument[]  @relation("DocumentReviewer")
 
   @@index([accountStatus])
@@ -260,6 +264,14 @@ model Profile {
   expectedAvailabilityDate DateTime?
   layoffSurvey             Json?
   layoffSurveyAt           DateTime?
+  hearthOptIn              Boolean          @default(false)
+  companyKey               String?
+  kitStartedAt             DateTime?
+  kitCompletedIds          String[]         @default([])
+  runwaySavings            Int?
+  runwayMonthlyBurn        Int?
+  runwayCurrency           String           @default("INR")
+  runwayUpdatedAt          DateTime?
   profileCompleteness      Int              @default(0)
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
@@ -273,9 +285,31 @@ model Profile {
   @@index([city])
   @@index([country])
   @@index([previousCompany])
+  @@index([companyKey, hearthOptIn])
   @@index([jobTitle])
   @@index([yearsExperience])
   @@index([industry])
+}
+
+model InterviewNote {
+  id           String    @id @default(cuid())
+  userId       String
+  company      String
+  role         String?
+  round        String
+  happenedAt   DateTime?
+  wentWell     String?   @db.Text
+  toImprove    String?   @db.Text
+  askNext      String?   @db.Text
+  nextStep     String?
+  feeling      String?
+  wantPeerEyes Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model Skill {
@@ -698,11 +732,29 @@ model StartupIdea {
   lookingFor       String?
   compensationType CompensationType @default(EQUITY)
   workPreference   WorkPreference   @default(REMOTE)
+  status           String           @default("OPEN")
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author         User                   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  collaborators  StartupCollaborator[]
 
   @@index([authorId])
   @@index([createdAt])
+  @@index([status])
+}
+
+model StartupCollaborator {
+  id        String   @id @default(cuid())
+  ideaId    String
+  userId    String
+  note      String?  @db.Text
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+
+  idea StartupIdea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, userId])
+  @@index([userId])
 }

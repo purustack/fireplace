@@ -172,6 +172,34 @@ export const reportSchema = z.object({
   details: z.string().max(2000).optional(),
 });
 
+export const runwaySchema = z.object({
+  runwaySavings: z.coerce.number().int().min(0).max(1_000_000_000),
+  runwayMonthlyBurn: z.coerce.number().int().min(1).max(10_000_000),
+  runwayCurrency: z.enum(["INR", "USD", "EUR", "GBP"]),
+});
+
+export const interviewNoteSchema = z.object({
+  company: z.string().min(1).max(120),
+  role: z.string().max(120).optional(),
+  round: z.enum(["SCREEN", "HIRING_MANAGER", "PANEL", "ASSIGNMENT", "OFFER", "OTHER"]),
+  happenedAt: z.string().optional(),
+  wentWell: z.string().max(4000).optional(),
+  toImprove: z.string().max(4000).optional(),
+  askNext: z.string().max(2000).optional(),
+  nextStep: z.string().max(200).optional(),
+  feeling: z.enum(["HOPEFUL", "MIXED", "DRAINED", "UNSURE"]).optional(),
+  wantPeerEyes: z.boolean().optional(),
+});
+
+export const buildIdeaSchema = z.object({
+  title: z.string().min(5).max(120),
+  description: z.string().min(20).max(4000),
+  requiredSkills: z.array(z.string().min(1).max(60)).max(10).default([]),
+  lookingFor: z.string().max(200).optional(),
+  compensationType: z.enum(["EQUITY", "PAID", "VOLUNTEER", "EQUITY_AND_PAID"]),
+  workPreference: z.enum(["REMOTE", "HYBRID", "ONSITE"]),
+});
+
 export const employmentEmailSchema = z.object({
   employmentEmail: z.string().email(),
 });

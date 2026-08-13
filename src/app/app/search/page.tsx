@@ -6,6 +6,7 @@ import { AvailabilityBadge, Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PRIVATE_PROFILE_OMIT } from "@/lib/profile-privacy";
 
 export default async function SearchPage({
   searchParams,
@@ -29,7 +30,7 @@ export default async function SearchPage({
             ],
           },
           take: 12,
-          omit: { layoffSurvey: true, layoffSurveyAt: true },
+          omit: PRIVATE_PROFILE_OMIT,
           include: {
             user: { select: { name: true, showLocation: true } },
             skills: { include: { skill: true }, take: 4 },

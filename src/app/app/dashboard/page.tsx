@@ -114,6 +114,31 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-ember/20 bg-gradient-to-br from-ember-soft/40 to-warm-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember">Recover</p>
+          <h2 className="mt-1 font-display text-xl text-coal">The first stretch</h2>
+          <p className="mt-2 text-sm text-ash">
+            72-hour kit, runway, people from your last company, interview notes. Private.
+          </p>
+          <Link href="/app/recover" className="mt-4 inline-block">
+            <Button size="sm">Open Recover</Button>
+          </Link>
+        </Card>
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember">Build</p>
+          <h2 className="mt-1 font-display text-xl text-coal">Build together</h2>
+          <p className="mt-2 text-sm text-ash">
+            Time and a skill, looking for someone in the same season — not a cofounder marketplace.
+          </p>
+          <Link href="/app/build" className="mt-4 inline-block">
+            <Button size="sm" variant="secondary">
+              See ideas
+            </Button>
+          </Link>
+        </Card>
+      </div>
+
       {!profile.layoffSurveyAt ? (
         <Card className="border-ember/25 bg-gradient-to-br from-ember-soft/50 to-warm-white">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ember">
