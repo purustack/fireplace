@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Flame } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { auth, isGoogleAuthEnabled } from "@/lib/auth";
 import { LoginForm } from "@/components/auth/forms";
+import { Suspense } from "react";
 
 export default async function HomePage() {
   const session = await auth();
@@ -18,7 +19,9 @@ export default async function HomePage() {
         </span>
         Fireplace
       </Link>
-      <LoginForm />
+      <Suspense>
+        <LoginForm googleEnabled={isGoogleAuthEnabled()} />
+      </Suspense>
     </div>
   );
 }

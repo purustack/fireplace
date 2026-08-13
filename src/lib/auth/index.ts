@@ -1,10 +1,10 @@
-import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import NextAuth, { type NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
+import { upsertGoogleUser } from "@/lib/auth/google-user";
 import type { Role, ModerationStatus } from "@prisma/client";
 
 declare module "next-auth" {
@@ -40,7 +40,7 @@ const credentialsSchema = z.object({
   password: z.string().min(8),
 });
 
-const providers = [
+const providers: NextAuthConfig["providers"] = [
   Credentials({
     name: "credentials",
     credentials: {
@@ -84,16 +84,20 @@ if (googleEnabled) {
     Google({
       clientId: process.env.AUTH_GOOGLE_ID!,
       clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-    }) as never,
+      allowDangerousEmailAccountLinking: true,
+    }),
   );
 }
 
+export function isGoogleAuthEnabled() {
+  return googleEnabled;
+}
+
 /**
- * Credentials + JWT does not need a DB adapter.
- * PrismaAdapter is only used when Google OAuth account linking is enabled.
+ * Credentials + Google both use JWT. We persist Google users ourselves
+ * instead of PrismaAdapter, which breaks credentials sessions.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  ...(googleEnabled ? { adapter: PrismaAdapter(prisma) } : {}),
   session: { strategy: "jwt" },
   pages: {
     signIn: "/",
@@ -101,8 +105,56 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers,
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
-      if (user) {
+    async signIn({ user, account }) {
+      if (account?.provider !== "google") return true;
+      if (!user.email) return false;
+      try {
+        const dbUser = await upsertGoogleUser({
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          account: {
+            provider: account.provider,
+            providerAccountId: account.providerAccountId,
+            type: account.type,
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            expires_at: account.expires_at,
+            token_type: account.token_type,
+            scope: account.scope,
+            id_token: account.id_token,
+          },
+        });
+        return Boolean(dbUser);
+      } catch (error) {
+        console.error("[Fireplace] Google sign-in failed:", error);
+        return false;
+      }
+    },
+    async jwt({ token, user, account, trigger, session }) {
+      if (account?.provider === "google" && user?.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: user.email.toLowerCase() },
+          select: {
+            id: true,
+            roles: true,
+            accountStatus: true,
+            onboardingStep: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        });
+        if (dbUser) {
+          token.sub = dbUser.id;
+          token.roles = dbUser.roles;
+          token.accountStatus = dbUser.accountStatus;
+          token.onboardingStep = dbUser.onboardingStep;
+          token.name = dbUser.name;
+          token.email = dbUser.email;
+          token.picture = dbUser.image;
+        }
+      } else if (user) {
         token.sub = user.id;
         token.roles = user.roles;
         token.accountStatus = user.accountStatus;

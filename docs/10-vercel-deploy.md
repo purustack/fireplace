@@ -24,8 +24,24 @@ In Project → Settings → Environment Variables, add for **Production** (and P
 | `NEXT_PUBLIC_APP_URL` | Same as `AUTH_URL` |
 | `STORAGE_DRIVER` | `local` |
 | `MAX_UPLOAD_BYTES` | `10485760` |
+| `AUTH_GOOGLE_ID` | Google OAuth client ID (optional — enables “Continue with Google”) |
+| `AUTH_GOOGLE_SECRET` | Google OAuth client secret |
 
 Then **Redeploy**.
+
+### Google login
+
+1. Open [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Create an **OAuth 2.0 Client ID** (Web application)
+3. Authorized JavaScript origins:
+   - `http://localhost:3000`
+   - `https://your-app.vercel.app`
+4. Authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google`
+   - `https://your-app.vercel.app/api/auth/callback/google`
+5. Set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` on Vercel (and in local `.env`), then redeploy
+
+The Google button only appears when both env vars are set. Existing email/password accounts with the same Google email are linked automatically.
 
 ## 4. After first deploy
 

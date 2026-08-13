@@ -17,6 +17,7 @@ export async function GET() {
       DATABASE_URL: databaseUrl,
       AUTH_URL: authUrl,
       NEXT_PUBLIC_APP_URL: appUrl,
+      AUTH_GOOGLE: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
     },
   });
 }
