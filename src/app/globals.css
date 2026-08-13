@@ -1,20 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --ember: #c45c26;
-  --ember-deep: #9a3f14;
-  --ember-soft: #f3e2d6;
-  --coal: #1c1917;
-  --ash: #57534e;
-  --smoke: #a8a29e;
-  --parchment: #faf7f4;
-  --parchment-deep: #f0ebe4;
-  --warm-white: #fffcfa;
-  --success: #2f6f4e;
-  --warning: #b45309;
-  --danger: #b91c1c;
-  --ring: #c45c26;
-  --radius: 0.75rem;
+  --ember: #d15a1f;
+  --ember-deep: #9a3510;
+  --ember-soft: #f8e6d8;
+  --coal: #1a1410;
+  --ash: #5c534c;
+  --smoke: #b4aaa2;
+  --parchment: #f7f1ea;
+  --parchment-deep: #efe4d8;
+  --warm-white: #fffaf5;
+  --success: #1f7a4d;
+  --warning: #c05612;
+  --danger: #b42318;
+  --ring: #d15a1f;
+  --radius: 1rem;
   --font-display: "Fraunces", Georgia, serif;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 }
@@ -58,7 +58,7 @@
   h3,
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
   }
 
   a {
@@ -75,16 +75,16 @@
 @layer utilities {
   .bg-hearth {
     background:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(196, 92, 38, 0.18), transparent 55%),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(154, 63, 20, 0.08), transparent 50%),
-      linear-gradient(180deg, var(--warm-white) 0%, var(--parchment) 45%, var(--parchment-deep) 100%);
+      radial-gradient(ellipse 90% 55% at 50% -15%, rgba(209, 90, 31, 0.28), transparent 58%),
+      radial-gradient(ellipse 50% 40% at 100% 0%, rgba(154, 53, 16, 0.12), transparent 50%),
+      linear-gradient(180deg, #fff8f1 0%, var(--parchment) 42%, var(--parchment-deep) 100%);
   }
 
   .bg-embers {
     background:
-      radial-gradient(circle at 20% 20%, rgba(196, 92, 38, 0.12), transparent 40%),
-      radial-gradient(circle at 80% 0%, rgba(243, 226, 214, 0.9), transparent 45%),
-      var(--parchment);
+      radial-gradient(circle at 12% 0%, rgba(209, 90, 31, 0.16), transparent 38%),
+      radial-gradient(circle at 92% 8%, rgba(248, 230, 216, 0.95), transparent 42%),
+      linear-gradient(180deg, #fffaf5 0%, var(--parchment) 100%);
   }
 
   .text-balance {
@@ -127,9 +127,9 @@
 @keyframes glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(196, 92, 38, 0);
+    box-shadow: 0 0 0 0 rgba(209, 90, 31, 0);
   }
   50% {
-    box-shadow: 0 0 28px 2px rgba(196, 92, 38, 0.18);
+    box-shadow: 0 0 36px 4px rgba(209, 90, 31, 0.22);
   }
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/rbac";
 import { messageRequestSchema, sendMessageSchema } from "@/lib/validations";
 import { rateLimit } from "@/lib/rate-limit";
+import { storeUpload } from "@/lib/storage";
 import type { ActionResult } from "./auth";
 import { revalidatePath } from "next/cache";
 
@@ -47,6 +48,29 @@ export async function sendMessageRequest(formData: FormData): Promise<ActionResu
     if (!recruiter?.verified) {
       return { ok: false, error: "This user only accepts messages from verified recruiters." };
     }
+  }
+
+  const existingConversation = await prisma.conversation.findFirst({
+    where: {
+      AND: [
+        { participants: { some: { userId: user.id } } },
+        { participants: { some: { userId: parsed.data.toId } } },
+      ],
+    },
+  });
+  if (existingConversation) {
+    return { ok: false, error: "You already have a conversation with this person." };
+  }
+
+  const pending = await prisma.messageRequest.findFirst({
+    where: {
+      fromId: user.id,
+      toId: parsed.data.toId,
+      status: "PENDING",
+    },
+  });
+  if (pending) {
+    return { ok: false, error: "You already sent a message request." };
   }
 
   const limit = rateLimit(`msg-req:${user.id}`, 30, 24 * 60 * 60 * 1000);
@@ -115,7 +139,7 @@ export async function sendMessage(formData: FormData): Promise<ActionResult> {
   const user = await requireAuth();
   const parsed = sendMessageSchema.safeParse({
     conversationId: formData.get("conversationId"),
-    body: formData.get("body"),
+    body: formData.get("body") ?? "",
   });
   if (!parsed.success) {
     return { ok: false, error: "Invalid message." };
@@ -138,11 +162,62 @@ export async function sendMessage(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: "Conversation not found." };
   }
 
+  const file = formData.get("resume");
+  const shareExisting = formData.get("shareExistingResume") === "on";
+  let attachment:
+    | {
+        attachmentKey: string;
+        attachmentName: string;
+        attachmentMime: string;
+        attachmentSize: number;
+        attachmentKind: string;
+      }
+    | undefined;
+
+  if (file instanceof File && file.size > 0) {
+    try {
+      const stored = await storeUpload({
+        file,
+        prefix: `messages/${parsed.data.conversationId}`,
+        kind: "resume",
+      });
+      attachment = {
+        attachmentKey: stored.storageKey,
+        attachmentName: stored.fileName,
+        attachmentMime: stored.mimeType,
+        attachmentSize: stored.sizeBytes,
+        attachmentKind: "RESUME",
+      };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Resume upload failed." };
+    }
+  } else if (shareExisting) {
+    const resume = await prisma.resume.findFirst({
+      where: { profile: { userId: user.id } },
+    });
+    if (!resume) {
+      return { ok: false, error: "No resume on your profile yet. Upload one first." };
+    }
+    attachment = {
+      attachmentKey: resume.storageKey,
+      attachmentName: resume.fileName,
+      attachmentMime: resume.mimeType,
+      attachmentSize: resume.sizeBytes,
+      attachmentKind: "RESUME",
+    };
+  }
+
+  const body = parsed.data.body?.trim() ?? "";
+  if (!body && !attachment) {
+    return { ok: false, error: "Write a message or attach a resume." };
+  }
+
   await prisma.message.create({
     data: {
       conversationId: parsed.data.conversationId,
       senderId: user.id,
-      body: parsed.data.body,
+      body: body || (attachment ? "Shared a resume" : ""),
+      ...attachment,
     },
   });
 
@@ -162,14 +237,48 @@ export async function sendMessage(formData: FormData): Promise<ActionResult> {
     data: others.map((o) => ({
       userId: o.userId,
       type: "NEW_MESSAGE" as const,
-      title: "New message",
-      body: parsed.data.body.slice(0, 120),
+      title: attachment ? "Resume shared" : "New message",
+      body: (body || attachment?.attachmentName || "New message").slice(0, 120),
       href: "/app/messages",
     })),
   });
 
   revalidatePath("/app/messages");
   return { ok: true };
+}
+
+export async function getConversation(conversationId: string) {
+  const user = await requireAuth();
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: {
+      conversationId_userId: { conversationId, userId: user.id },
+    },
+  });
+  if (!participant) return null;
+
+  return prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              profile: { select: { username: true, jobTitle: true } },
+            },
+          },
+        },
+      },
+      messages: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          sender: { select: { id: true, name: true, image: true } },
+        },
+      },
+    },
+  });
 }
 
 export async function blockUser(userId: string): Promise<ActionResult> {
@@ -200,7 +309,7 @@ export async function getMessagingInbox() {
                 id: true,
                 name: true,
                 image: true,
-                profile: { select: { username: true } },
+                profile: { select: { username: true, jobTitle: true } },
               },
             },
           },
@@ -212,7 +321,7 @@ export async function getMessagingInbox() {
       where: { toId: user.id, status: "PENDING" },
       include: {
         from: {
-          select: { id: true, name: true, profile: { select: { username: true } } },
+          select: { id: true, name: true, image: true, profile: { select: { username: true } } },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -224,6 +333,7 @@ export async function getMessagingInbox() {
           select: {
             id: true,
             name: true,
+            image: true,
             recruiterProfile: { select: { companyName: true, verified: true } },
           },
         },

@@ -110,7 +110,7 @@ export const messageRequestSchema = z.object({
 
 export const sendMessageSchema = z.object({
   conversationId: z.string().cuid(),
-  body: z.string().min(1).max(5000),
+  body: z.string().max(5000).optional().default(""),
 });
 
 export const reportSchema = z.object({

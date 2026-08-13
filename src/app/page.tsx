@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Flame } from "lucide-react";
 
 export default function LandingPage() {
   return (
     <div className="bg-hearth min-h-screen">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="font-display text-2xl text-coal">
+        <Link href="/" className="flex items-center gap-2 font-display text-2xl text-coal">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-ember to-ember-deep text-warm-white">
+            <Flame className="h-4 w-4" />
+          </span>
           Fireplace
         </Link>
         <nav className="flex items-center gap-3">

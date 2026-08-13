@@ -16,27 +16,50 @@ export async function GET(_req: Request, { params }: Params) {
   const { key: parts } = await params;
   const storageKey = parts.join("/");
 
-  // Verification docs: staff only
   if (storageKey.startsWith("verification/")) {
     if (!hasRole(session.user, Role.MODERATOR, Role.ADMIN)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 
-  // Resumes: owner or staff; recruiters only after accepted contact (simplified: owner/staff)
+  if (storageKey.startsWith("messages/")) {
+    const conversationId = parts[1];
+    const participant = await prisma.conversationParticipant.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId,
+          userId: session.user.id,
+        },
+      },
+    });
+    if (!participant && !hasRole(session.user, Role.MODERATOR, Role.ADMIN)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   if (storageKey.startsWith("resumes/")) {
     const ownerId = parts[1];
     const isOwner = ownerId === session.user.id;
     const isStaff = hasRole(session.user, Role.MODERATOR, Role.ADMIN);
     if (!isOwner && !isStaff) {
-      const accepted = await prisma.recruiterContactRequest.findFirst({
-        where: {
-          recruiterId: session.user.id,
-          candidateId: ownerId,
-          status: "ACCEPTED",
-        },
-      });
-      if (!accepted) {
+      const [accepted, sharedInChat] = await Promise.all([
+        prisma.recruiterContactRequest.findFirst({
+          where: {
+            recruiterId: session.user.id,
+            candidateId: ownerId,
+            status: "ACCEPTED",
+          },
+        }),
+        prisma.message.findFirst({
+          where: {
+            attachmentKey: storageKey,
+            conversation: {
+              participants: { some: { userId: session.user.id } },
+            },
+          },
+        }),
+      ]);
+      if (!accepted && !sharedInChat) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -47,10 +70,13 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const filename = parts[parts.length - 1] ?? "file";
+  const isPdf = filename.toLowerCase().endsWith(".pdf");
+
   return new NextResponse(new Uint8Array(data), {
     headers: {
-      "Content-Type": "application/octet-stream",
-      "Content-Disposition": "inline",
+      "Content-Type": isPdf ? "application/pdf" : "application/octet-stream",
+      "Content-Disposition": `inline; filename="${filename}"`,
       "Cache-Control": "private, no-store",
     },
   });

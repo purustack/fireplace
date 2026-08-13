@@ -40,7 +40,10 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-coal md:text-4xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ember">
+          Your hearth
+        </p>
+        <h1 className="mt-1 font-display text-3xl text-coal md:text-4xl">
           Welcome back, {user.name.split(" ")[0]}
         </h1>
         <p className="mt-2 text-ash">
