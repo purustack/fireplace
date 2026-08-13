@@ -6,6 +6,7 @@ import { getProfileByUsername } from "@/actions/profile";
 import { AvailabilityBadge, Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
+import { AvatarUploader } from "@/components/profile/avatar-uploader";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { hasLayoffVerifiedBadge } from "@/lib/verification-badge";
@@ -32,7 +33,11 @@ export default async function ProfilePage({
       <Card className="overflow-hidden p-0">
         <div className="h-28 bg-gradient-to-r from-ember via-ember-deep to-coal" />
         <div className="-mt-10 space-y-4 px-6 pb-6">
-          <Avatar name={profile.user.name} image={profile.user.image} size="xl" />
+          {isOwner ? (
+            <AvatarUploader name={profile.user.name} image={profile.user.image} />
+          ) : (
+            <Avatar name={profile.user.name} image={profile.user.image} size="xl" />
+          )}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="font-display text-4xl text-coal">{profile.user.name}</h1>

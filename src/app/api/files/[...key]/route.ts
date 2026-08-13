@@ -9,35 +9,41 @@ type Params = { params: Promise<{ key: string[] }> };
 
 export async function GET(_req: Request, { params }: Params) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const { key: parts } = await params;
+  const storageKey = parts.join("/");
+  const isAvatar = storageKey.startsWith("avatars/");
+
+  if (!isAvatar && !session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { key: parts } = await params;
-  const storageKey = parts.join("/");
-
   if (storageKey.startsWith("verification/")) {
-    if (!hasRole(session.user, Role.MODERATOR, Role.ADMIN)) {
+    if (!session?.user || !hasRole(session.user, Role.MODERATOR, Role.ADMIN)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 
   if (storageKey.startsWith("messages/")) {
     const conversationId = parts[1];
-    const participant = await prisma.conversationParticipant.findUnique({
-      where: {
-        conversationId_userId: {
-          conversationId,
-          userId: session.user.id,
-        },
-      },
-    });
-    if (!participant && !hasRole(session.user, Role.MODERATOR, Role.ADMIN)) {
+    const participant = session?.user
+      ? await prisma.conversationParticipant.findUnique({
+          where: {
+            conversationId_userId: {
+              conversationId,
+              userId: session.user.id,
+            },
+          },
+        })
+      : null;
+    if (!participant && !(session?.user && hasRole(session.user, Role.MODERATOR, Role.ADMIN))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 
   if (storageKey.startsWith("resumes/")) {
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const ownerId = parts[1];
     const isOwner = ownerId === session.user.id;
     const isStaff = hasRole(session.user, Role.MODERATOR, Role.ADMIN);
@@ -71,13 +77,21 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   const filename = parts[parts.length - 1] ?? "file";
-  const isPdf = filename.toLowerCase().endsWith(".pdf");
 
   return new NextResponse(new Uint8Array(data), {
     headers: {
-      "Content-Type": isPdf ? "application/pdf" : "application/octet-stream",
+      "Content-Type": mimeFor(filename),
       "Content-Disposition": `inline; filename="${filename}"`,
-      "Cache-Control": "private, no-store",
+      "Cache-Control": isAvatar ? "public, max-age=86400" : "private, no-store",
     },
   });
+}
+
+function mimeFor(filename: string) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  return "application/octet-stream";
 }

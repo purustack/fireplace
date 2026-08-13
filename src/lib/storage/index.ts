@@ -11,7 +11,8 @@ const ALLOWED_RESUME = new Set([
 /** Termination / layoff letters: PDF only */
 const ALLOWED_VERIFICATION = new Set(["application/pdf"]);
 
-const ALLOWED_AVATAR = new Set(["image/jpeg", "image/png"]);
+const ALLOWED_AVATAR = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const MAX_BYTES = Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024);
 
@@ -35,8 +36,13 @@ export async function storeUpload(opts: {
   kind: "resume" | "verification" | "avatar";
 }): Promise<StoredFile> {
   const { file, prefix, kind } = opts;
-  if (file.size > MAX_BYTES) {
-    throw new Error(`File exceeds ${Math.round(MAX_BYTES / 1024 / 1024)}MB limit.`);
+  const sizeLimit = kind === "avatar" ? MAX_AVATAR_BYTES : MAX_BYTES;
+  if (file.size > sizeLimit) {
+    throw new Error(
+      kind === "avatar"
+        ? "Profile photo must be under 2MB."
+        : `File exceeds ${Math.round(MAX_BYTES / 1024 / 1024)}MB limit.`,
+    );
   }
 
   const allowed =
@@ -48,12 +54,18 @@ export async function storeUpload(opts: {
 
   const looksLikePdf =
     file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const looksLikeAvatar =
+    ALLOWED_AVATAR.has(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
 
   if (kind === "verification" && !looksLikePdf) {
     throw new Error("Termination letters must be uploaded as a PDF.");
   }
 
-  if (!allowed.has(file.type) && !(kind === "verification" && looksLikePdf)) {
+  if (kind === "avatar" && !looksLikeAvatar) {
+    throw new Error("Profile photo must be a JPG, PNG, or WebP.");
+  }
+
+  if (!allowed.has(file.type) && !(kind === "verification" && looksLikePdf) && kind !== "avatar") {
     throw new Error(
       kind === "verification"
         ? "Termination letters must be uploaded as a PDF."
@@ -68,7 +80,11 @@ export async function storeUpload(opts: {
   const storageKey = `${prefix}/${randomUUID()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const mimeType =
-    kind === "verification" ? "application/pdf" : file.type || "application/octet-stream";
+    kind === "verification"
+      ? "application/pdf"
+      : kind === "avatar"
+        ? avatarMime(file)
+        : file.type || "application/octet-stream";
   await storage.put(storageKey, buffer, mimeType);
 
   return {
@@ -81,4 +97,12 @@ export async function storeUpload(opts: {
     mimeType,
     sizeBytes: file.size,
   };
+}
+
+function avatarMime(file: File) {
+  if (ALLOWED_AVATAR.has(file.type)) return file.type;
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
 }

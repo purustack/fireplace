@@ -1,8 +1,10 @@
 import { auth } from "@/lib/auth";
 import { hasRole } from "@/lib/rbac";
 import { logoutUser } from "@/actions/auth";
+import { getUnreadMessageCount } from "@/actions/messages";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { LiveMessageBadge, MessageLiveProvider } from "@/components/messaging/live-message-badge";
 import { Role } from "@prisma/client";
 import { Flame, LayoutDashboard, Newspaper, Search, MessageCircle, Users, Settings } from "lucide-react";
 
@@ -18,9 +20,11 @@ const links = [
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const roles = session?.user?.roles ?? [];
+  const unreadMessages = session?.user ? await getUnreadMessageCount() : 0;
 
   return (
-    <div className="bg-embers min-h-screen">
+    <MessageLiveProvider initialCount={unreadMessages}>
+      <div className="bg-embers min-h-screen">
       <header className="sticky top-0 z-40 border-b border-smoke/20 bg-warm-white/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-6">
@@ -37,9 +41,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={l.href}
                     href={l.href}
-                    className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-ash transition hover:bg-ember-soft/60 hover:text-coal"
+                    className="relative inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-ash transition hover:bg-ember-soft/60 hover:text-coal"
                   >
-                    <l.icon className="h-4 w-4" />
+                    <span className="relative inline-flex">
+                      <l.icon className="h-4 w-4" />
+                      {l.href === "/app/messages" ? <LiveMessageBadge /> : null}
+                    </span>
                     {l.label}
                   </Link>
                 ))}
@@ -71,15 +78,19 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={l.href}
                 href={l.href}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-parchment px-3 py-1.5 text-xs font-semibold text-ash"
+                className="relative inline-flex shrink-0 items-center gap-1 rounded-full bg-parchment px-3 py-1.5 text-xs font-semibold text-ash"
               >
-                <l.icon className="h-3.5 w-3.5" />
+                <span className="relative inline-flex">
+                  <l.icon className="h-3.5 w-3.5" />
+                  {l.href === "/app/messages" ? <LiveMessageBadge /> : null}
+                </span>
                 {l.label}
               </Link>
             ))}
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
-    </div>
+        <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
+      </div>
+    </MessageLiveProvider>
   );
 }

@@ -8,7 +8,7 @@ import {
   privacySchema,
 } from "@/lib/validations";
 import { slugify } from "@/lib/utils";
-import { storeUpload } from "@/lib/storage";
+import { storage, storeUpload } from "@/lib/storage";
 import { SkillType } from "@prisma/client";
 import type { ActionResult } from "./auth";
 import { revalidatePath } from "next/cache";
@@ -211,6 +211,66 @@ export async function uploadResume(formData: FormData): Promise<ActionResult> {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
   }
+}
+
+function avatarKeyFromUrl(image: string | null | undefined) {
+  if (!image?.startsWith("/api/files/")) return null;
+  return image.replace(/^\/api\/files\//, "").split("?")[0];
+}
+
+export async function uploadAvatar(formData: FormData): Promise<ActionResult> {
+  const user = await requireAuth();
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Please choose a profile photo." };
+  }
+
+  try {
+    const stored = await storeUpload({
+      file,
+      prefix: `avatars/${user.id}`,
+      kind: "avatar",
+    });
+
+    const current = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { image: true },
+    });
+    const previousKey = avatarKeyFromUrl(current?.image);
+    if (previousKey) await storage.delete(previousKey);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { image: `/api/files/${stored.storageKey}` },
+    });
+
+    revalidatePath("/app", "layout");
+    revalidatePath("/app/settings");
+    revalidatePath("/app/profile");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
+  }
+}
+
+export async function removeAvatar(): Promise<ActionResult> {
+  const user = await requireAuth();
+  const current = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { image: true },
+  });
+  const key = avatarKeyFromUrl(current?.image);
+  if (key) await storage.delete(key);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { image: null },
+  });
+
+  revalidatePath("/app", "layout");
+  revalidatePath("/app/settings");
+  revalidatePath("/app/profile");
+  return { ok: true };
 }
 
 export async function updatePrivacySettings(formData: FormData): Promise<ActionResult> {

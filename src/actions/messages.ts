@@ -247,6 +247,27 @@ export async function sendMessage(formData: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
+export async function getUnreadMessageCount() {
+  const user = await requireAuth();
+  const [unreadMessages, pendingRequests, pendingContacts] = await Promise.all([
+    prisma.message.count({
+      where: {
+        senderId: { not: user.id },
+        readAt: null,
+        conversation: { participants: { some: { userId: user.id } } },
+      },
+    }),
+    prisma.messageRequest.count({
+      where: { toId: user.id, status: "PENDING" },
+    }),
+    prisma.recruiterContactRequest.count({
+      where: { candidateId: user.id, status: "PENDING" },
+    }),
+  ]);
+
+  return unreadMessages + pendingRequests + pendingContacts;
+}
+
 export async function getConversation(conversationId: string) {
   const user = await requireAuth();
   const participant = await prisma.conversationParticipant.findUnique({
@@ -255,6 +276,34 @@ export async function getConversation(conversationId: string) {
     },
   });
   if (!participant) return null;
+
+  const unreadIncoming = await prisma.message.count({
+    where: {
+      conversationId,
+      senderId: { not: user.id },
+      readAt: null,
+    },
+  });
+
+  if (unreadIncoming > 0) {
+    await prisma.$transaction([
+      prisma.message.updateMany({
+        where: {
+          conversationId,
+          senderId: { not: user.id },
+          readAt: null,
+        },
+        data: { readAt: new Date() },
+      }),
+      prisma.conversationParticipant.update({
+        where: {
+          conversationId_userId: { conversationId, userId: user.id },
+        },
+        data: { lastReadAt: new Date() },
+      }),
+    ]);
+    revalidatePath("/app", "layout");
+  }
 
   return prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -315,6 +364,13 @@ export async function getMessagingInbox() {
           },
         },
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        _count: {
+          select: {
+            messages: {
+              where: { senderId: { not: user.id }, readAt: null },
+            },
+          },
+        },
       },
     }),
     prisma.messageRequest.findMany({

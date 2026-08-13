@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { updatePrivacySettings } from "@/actions/profile";
+import { AvatarUploader } from "@/components/profile/avatar-uploader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label, Select } from "@/components/ui/input";
@@ -23,6 +24,10 @@ export default async function SettingsPage() {
           You control what recruiters and the community can see.
         </p>
       </div>
+
+      <Card>
+        <AvatarUploader name={user.name} image={user.image} />
+      </Card>
 
       <Card>
         <form

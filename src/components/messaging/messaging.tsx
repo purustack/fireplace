@@ -1,27 +1,33 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   getConversation,
+  getMessagingInbox,
   respondMessageRequest,
   sendMessage,
   sendMessageRequest,
 } from "@/actions/messages";
 import { respondContactRequest } from "@/actions/recruit";
+import { notifyMessagesChanged } from "@/components/messaging/live-message-badge";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
+import { UnreadBadge } from "@/components/ui/unread-badge";
 import { FileText, Paperclip, Send } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
-type Inbox = Awaited<ReturnType<typeof import("@/actions/messages").getMessagingInbox>>;
+type Inbox = Awaited<ReturnType<typeof getMessagingInbox>>;
 type ConversationDetail = NonNullable<Awaited<ReturnType<typeof getConversation>>>;
 
+const POLL_MS = 4000;
+const LIVE_EVENT = "fireplace:messages";
+
 export function MessagingClient({
-  inbox,
+  inbox: initialInbox,
   toUserId,
   currentUserId,
   hasResume,
@@ -34,21 +40,76 @@ export function MessagingClient({
   initialConversationId?: string;
 }) {
   const [pending, start] = useTransition();
-  const [selectedId, setSelectedId] = useState(initialConversationId ?? inbox.conversations[0]?.id);
+  const [inbox, setInbox] = useState(initialInbox);
+  const [selectedId, setSelectedId] = useState(
+    initialConversationId ?? initialInbox.conversations[0]?.id,
+  );
   const [thread, setThread] = useState<ConversationDetail | null>(null);
   const [requestSent, setRequestSent] = useState(false);
   const [error, setError] = useState<string>();
+  const threadEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageId = thread?.messages.at(-1)?.id;
+  const inboxStampRef = useRef<string>("");
 
   useEffect(() => {
-    if (!selectedId) {
-      setThread(null);
-      return;
+    let cancelled = false;
+
+    async function refresh() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const nextInbox = await getMessagingInbox();
+        if (cancelled) return;
+        setInbox(nextInbox);
+
+        const stamp = [
+          nextInbox.conversations
+            .map((c) => `${c.id}:${c.messages[0]?.id}:${c._count.messages}`)
+            .join("|"),
+          nextInbox.requests.map((r) => r.id).join("|"),
+          nextInbox.contactRequests.map((r) => r.id).join("|"),
+        ].join("/");
+        if (stamp !== inboxStampRef.current) {
+          const first = inboxStampRef.current === "";
+          inboxStampRef.current = stamp;
+          if (!first) notifyMessagesChanged();
+        }
+
+        const openId = selectedId ?? nextInbox.conversations[0]?.id;
+        if (!selectedId && openId) setSelectedId(openId);
+
+        if (openId) {
+          const data = await getConversation(openId);
+          if (!cancelled) setThread(data);
+        } else if (!cancelled) {
+          setThread(null);
+        }
+      } catch {
+        /* ignore network blips */
+      }
     }
-    start(async () => {
-      const data = await getConversation(selectedId);
-      setThread(data);
-    });
+
+    refresh();
+    const timer = window.setInterval(refresh, POLL_MS);
+    const onFocus = () => refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener(LIVE_EVENT, onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(LIVE_EVENT, onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [selectedId]);
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lastMessageId]);
 
   const other = thread?.participants.find((p) => p.user.id !== currentUserId)?.user;
 
@@ -68,8 +129,11 @@ export function MessagingClient({
                 active ? "bg-ember-soft ring-1 ring-ember/20" : "hover:bg-parchment"
               }`}
             >
-              <Avatar name={person?.name ?? "Member"} image={person?.image} size="sm" />
-              <span className="min-w-0">
+              <span className="relative">
+                <Avatar name={person?.name ?? "Member"} image={person?.image} size="sm" />
+                <UnreadBadge count={c._count.messages} />
+              </span>
+              <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold text-coal">
                   {person?.name ?? "Conversation"}
                 </span>
@@ -97,7 +161,13 @@ export function MessagingClient({
                     <Button
                       size="sm"
                       disabled={pending}
-                      onClick={() => start(async () => { await respondMessageRequest(r.id, "ACCEPTED"); })}
+                      onClick={() =>
+                        start(async () => {
+                          await respondMessageRequest(r.id, "ACCEPTED");
+                          notifyMessagesChanged();
+                          setInbox(await getMessagingInbox());
+                        })
+                      }
                     >
                       Accept
                     </Button>
@@ -105,7 +175,13 @@ export function MessagingClient({
                       size="sm"
                       variant="secondary"
                       disabled={pending}
-                      onClick={() => start(async () => { await respondMessageRequest(r.id, "REJECTED"); })}
+                      onClick={() =>
+                        start(async () => {
+                          await respondMessageRequest(r.id, "REJECTED");
+                          notifyMessagesChanged();
+                          setInbox(await getMessagingInbox());
+                        })
+                      }
                     >
                       Reject
                     </Button>
@@ -133,7 +209,13 @@ export function MessagingClient({
                   <Button
                     size="sm"
                     disabled={pending}
-                    onClick={() => start(async () => { await respondContactRequest(r.id, "ACCEPTED"); })}
+                    onClick={() =>
+                      start(async () => {
+                        await respondContactRequest(r.id, "ACCEPTED");
+                        notifyMessagesChanged();
+                        setInbox(await getMessagingInbox());
+                      })
+                    }
                   >
                     Accept
                   </Button>
@@ -141,7 +223,13 @@ export function MessagingClient({
                     size="sm"
                     variant="secondary"
                     disabled={pending}
-                    onClick={() => start(async () => { await respondContactRequest(r.id, "DECLINED"); })}
+                    onClick={() =>
+                      start(async () => {
+                        await respondContactRequest(r.id, "DECLINED");
+                        notifyMessagesChanged();
+                        setInbox(await getMessagingInbox());
+                      })
+                    }
                   >
                     Decline
                   </Button>
@@ -173,6 +261,7 @@ export function MessagingClient({
                     else {
                       setRequestSent(true);
                       setError(undefined);
+                      notifyMessagesChanged();
                     }
                   })
                 }
@@ -254,6 +343,7 @@ export function MessagingClient({
                   </div>
                 );
               })}
+              <div ref={threadEndRef} />
             </div>
 
             <form
@@ -264,8 +354,13 @@ export function MessagingClient({
                   if (!res.ok) setError(res.error);
                   else {
                     setError(undefined);
-                    const data = await getConversation(thread.id);
+                    notifyMessagesChanged();
+                    const [data, nextInbox] = await Promise.all([
+                      getConversation(thread.id),
+                      getMessagingInbox(),
+                    ]);
                     setThread(data);
+                    setInbox(nextInbox);
                     (document.getElementById("chat-composer") as HTMLFormElement | null)?.reset();
                   }
                 })

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveProfessionalProfile, uploadResume } from "@/actions/profile";
+import { saveProfessionalProfile, uploadAvatar, uploadResume } from "@/actions/profile";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea, Select, FieldError } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -43,6 +43,14 @@ export function ProfessionalForm() {
             const res = await saveProfessionalProfile(fd);
             if (!res.ok) setError(res.error);
             else {
+              const photo = fd.get("avatar");
+              if (photo instanceof File && photo.size > 0) {
+                const photoRes = await uploadAvatar(fd);
+                if (!photoRes.ok) {
+                  setError(photoRes.error);
+                  return;
+                }
+              }
               const resume = fd.get("resume");
               if (resume instanceof File && resume.size > 0) {
                 await uploadResume(fd);
@@ -151,6 +159,16 @@ export function ProfessionalForm() {
         <div>
           <Label htmlFor="about">About</Label>
           <Textarea id="about" name="about" />
+        </div>
+        <div>
+          <Label htmlFor="avatar">Profile photo</Label>
+          <Input
+            id="avatar"
+            name="avatar"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+          />
+          <p className="mt-1 text-xs text-ash">Optional. JPG, PNG, or WebP · max 2MB</p>
         </div>
         <div>
           <Label htmlFor="resume">Resume (PDF/DOC)</Label>
