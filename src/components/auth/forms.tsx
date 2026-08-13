@@ -67,7 +67,7 @@ function AuthDivider() {
   );
 }
 
-export function LoginForm({ googleEnabled = false }: { googleEnabled?: boolean }) {
+export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const oauthError = searchParams.get("error");
@@ -78,23 +78,19 @@ export function LoginForm({ googleEnabled = false }: { googleEnabled?: boolean }
     (oauthError
       ? oauthError === "AccessDenied"
         ? "Google sign-in was denied or this account is suspended."
-        : "Google sign-in failed. Please try again."
+        : oauthError === "Configuration"
+          ? "Google login isn’t configured yet. Add AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET on Vercel."
+          : "Google sign-in failed. Please try again."
       : undefined);
 
   return (
     <Card className="mx-auto w-full max-w-md">
       <h1 className="font-display text-3xl text-coal">Welcome back</h1>
       <p className="mt-2 text-sm text-ash">Log in to continue rebuilding.</p>
-      {googleEnabled ? (
-        <>
-          <div className="mt-6">
-            <GoogleSignInButton label="Continue with Google" />
-          </div>
-          <AuthDivider />
-        </>
-      ) : (
-        <div className="mt-6" />
-      )}
+      <div className="mt-6">
+        <GoogleSignInButton label="Continue with Google" />
+      </div>
+      <AuthDivider />
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -148,13 +144,7 @@ export function LoginForm({ googleEnabled = false }: { googleEnabled?: boolean }
   );
 }
 
-export function RegisterForm({
-  recruiterHint,
-  googleEnabled = false,
-}: {
-  recruiterHint?: boolean;
-  googleEnabled?: boolean;
-}) {
+export function RegisterForm({ recruiterHint }: { recruiterHint?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
@@ -169,16 +159,10 @@ export function RegisterForm({
           ? "Create an account, then complete recruiter verification."
           : "A professional community for people affected by layoffs."}
       </p>
-      {googleEnabled ? (
-        <>
-          <div className="mt-6">
-            <GoogleSignInButton label="Continue with Google" />
-          </div>
-          <AuthDivider />
-        </>
-      ) : (
-        <div className="mt-6" />
-      )}
+      <div className="mt-6">
+        <GoogleSignInButton label="Continue with Google" />
+      </div>
+      <AuthDivider />
       <form
         className="space-y-4"
         onSubmit={(e) => {

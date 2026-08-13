@@ -75,23 +75,35 @@ const providers: NextAuthConfig["providers"] = [
   }),
 ];
 
-const googleEnabled = Boolean(
-  process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET,
-);
+function googleClientId() {
+  return (
+    process.env.AUTH_GOOGLE_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.AUTH_GOOGLE_CLIENT_ID ||
+    ""
+  );
+}
 
-if (googleEnabled) {
-  providers.push(
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID!,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-      allowDangerousEmailAccountLinking: true,
-    }),
+function googleClientSecret() {
+  return (
+    process.env.AUTH_GOOGLE_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.AUTH_GOOGLE_CLIENT_SECRET ||
+    ""
   );
 }
 
 export function isGoogleAuthEnabled() {
-  return googleEnabled;
+  return Boolean(googleClientId() && googleClientSecret());
 }
+
+providers.push(
+  Google({
+    clientId: googleClientId(),
+    clientSecret: googleClientSecret(),
+    allowDangerousEmailAccountLinking: true,
+  }),
+);
 
 /**
  * Credentials + Google both use JWT. We persist Google users ourselves

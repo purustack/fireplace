@@ -1,6 +1,7 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { Flame } from "lucide-react";
-import { isGoogleAuthEnabled } from "@/lib/auth";
 import { RegisterForm } from "@/components/auth/forms";
 
 export default async function RegisterPage({
@@ -17,10 +18,7 @@ export default async function RegisterPage({
         </span>
         Fireplace
       </Link>
-      <RegisterForm
-        recruiterHint={params.role === "recruiter"}
-        googleEnabled={isGoogleAuthEnabled()}
-      />
+      <RegisterForm recruiterHint={params.role === "recruiter"} />
     </div>
   );
 }

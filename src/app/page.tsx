@@ -1,7 +1,9 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Flame } from "lucide-react";
-import { auth, isGoogleAuthEnabled } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { LoginForm } from "@/components/auth/forms";
 import { Suspense } from "react";
 
@@ -20,7 +22,7 @@ export default async function HomePage() {
         Fireplace
       </Link>
       <Suspense>
-        <LoginForm googleEnabled={isGoogleAuthEnabled()} />
+        <LoginForm />
       </Suspense>
     </div>
   );
