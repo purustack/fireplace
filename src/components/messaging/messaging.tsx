@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  editMessage,
   getConversation,
   getMessagingInbox,
   respondMessageRequest,
@@ -17,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { UnreadBadge } from "@/components/ui/unread-badge";
-import { FileText, Paperclip, Send } from "lucide-react";
+import { Check, FileText, Pencil, Paperclip, Send, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 type Inbox = Awaited<ReturnType<typeof getMessagingInbox>>;
@@ -29,27 +30,54 @@ const LIVE_EVENT = "fireplace:messages";
 export function MessagingClient({
   inbox: initialInbox,
   toUserId,
+  toUserName,
+  toUserImage,
   currentUserId,
   hasResume,
   initialConversationId,
 }: {
   inbox: Inbox;
   toUserId?: string;
+  toUserName?: string;
+  toUserImage?: string | null;
   currentUserId: string;
   hasResume: boolean;
   initialConversationId?: string;
 }) {
   const [pending, start] = useTransition();
   const [inbox, setInbox] = useState(initialInbox);
-  const [selectedId, setSelectedId] = useState(
-    initialConversationId ?? initialInbox.conversations[0]?.id,
+  const [selectedId, setSelectedId] = useState<string | undefined>(
+    initialConversationId ?? (toUserId ? undefined : initialInbox.conversations[0]?.id),
   );
+  const [selectedOutgoingId, setSelectedOutgoingId] = useState<string | undefined>();
   const [thread, setThread] = useState<ConversationDetail | null>(null);
   const [requestSent, setRequestSent] = useState(false);
   const [error, setError] = useState<string>();
+  const [editingId, setEditingId] = useState<string>();
+  const [editBody, setEditBody] = useState("");
   const threadEndRef = useRef<HTMLDivElement>(null);
   const lastMessageId = thread?.messages.at(-1)?.id;
   const inboxStampRef = useRef<string>("");
+  const outgoingTargetRef = useRef<string | undefined>(undefined);
+
+  const alreadyMessaged = Boolean(
+    toUserId &&
+      inbox.conversations.some((c) => c.participants.some((p) => p.user.id === toUserId)),
+  );
+  const pendingToTarget = toUserId
+    ? inbox.outgoingRequests.find((r) => r.to.id === toUserId)
+    : undefined;
+  const composingNew = Boolean(toUserId && !alreadyMessaged && !pendingToTarget && !requestSent);
+  const selectedOutgoing = inbox.outgoingRequests.find((r) => r.id === selectedOutgoingId);
+
+  useEffect(() => {
+    if (!pendingToTarget) return;
+    setRequestSent(true);
+    setSelectedOutgoingId(pendingToTarget.id);
+    outgoingTargetRef.current = pendingToTarget.to.id;
+    setSelectedId(undefined);
+    setThread(null);
+  }, [pendingToTarget?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,12 +94,41 @@ export function MessagingClient({
             .map((c) => `${c.id}:${c.messages[0]?.id}:${c._count.messages}`)
             .join("|"),
           nextInbox.requests.map((r) => r.id).join("|"),
+          nextInbox.outgoingRequests.map((r) => r.id).join("|"),
           nextInbox.contactRequests.map((r) => r.id).join("|"),
         ].join("/");
         if (stamp !== inboxStampRef.current) {
           const first = inboxStampRef.current === "";
           inboxStampRef.current = stamp;
           if (!first) notifyMessagesChanged();
+        }
+
+        if (selectedOutgoingId) {
+          const stillPending = nextInbox.outgoingRequests.some((r) => r.id === selectedOutgoingId);
+          if (!stillPending) {
+            const targetId = outgoingTargetRef.current;
+            const accepted = targetId
+              ? nextInbox.conversations.find((c) =>
+                  c.participants.some((p) => p.user.id === targetId),
+                )
+              : undefined;
+            outgoingTargetRef.current = undefined;
+            setSelectedOutgoingId(undefined);
+            if (accepted) {
+              setSelectedId(accepted.id);
+              const data = await getConversation(accepted.id);
+              if (!cancelled) setThread(data);
+              return;
+            }
+          } else if (!cancelled) {
+            setThread(null);
+          }
+          return;
+        }
+
+        if (composingNew) {
+          if (!cancelled) setThread(null);
+          return;
         }
 
         const openId = selectedId ?? nextInbox.conversations[0]?.id;
@@ -105,26 +162,65 @@ export function MessagingClient({
       window.removeEventListener(LIVE_EVENT, onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [selectedId]);
+  }, [selectedId, selectedOutgoingId, composingNew]);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lastMessageId]);
 
   const other = thread?.participants.find((p) => p.user.id !== currentUserId)?.user;
+  const lastOwnMessageId = thread?.messages.findLast(
+    (message) => message.senderId === currentUserId,
+  )?.id;
+  const showCompose = composingNew && !selectedOutgoing;
+  const emptyInbox =
+    inbox.conversations.length === 0 && inbox.outgoingRequests.length === 0;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
       <Card className="space-y-3 lg:max-h-[70vh] lg:overflow-y-auto">
         <h2 className="font-display text-lg">Inbox</h2>
+        {inbox.outgoingRequests.map((r) => {
+          const active = selectedOutgoing?.id === r.id;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                setSelectedOutgoingId(r.id);
+                outgoingTargetRef.current = r.to.id;
+                setSelectedId(undefined);
+                setThread(null);
+              }}
+              className={`flex w-full items-start gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
+                active ? "bg-ember-soft ring-1 ring-ember/20" : "hover:bg-parchment"
+              }`}
+            >
+              <Avatar name={r.to.name} image={r.to.image} size="sm" />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="block truncate font-semibold text-coal">{r.to.name}</span>
+                  <Badge tone="warning" className="shrink-0">
+                    Pending
+                  </Badge>
+                </span>
+                <span className="block truncate text-xs text-ash">{r.initialMessage}</span>
+              </span>
+            </button>
+          );
+        })}
         {inbox.conversations.map((c) => {
           const person = c.participants.find((p) => p.user.id !== currentUserId)?.user;
-          const active = c.id === selectedId;
+          const active = c.id === selectedId && !selectedOutgoing;
           return (
             <button
               key={c.id}
               type="button"
-              onClick={() => setSelectedId(c.id)}
+              onClick={() => {
+                setSelectedId(c.id);
+                setSelectedOutgoingId(undefined);
+                outgoingTargetRef.current = undefined;
+              }}
               className={`flex w-full items-start gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
                 active ? "bg-ember-soft ring-1 ring-ember/20" : "hover:bg-parchment"
               }`}
@@ -142,7 +238,7 @@ export function MessagingClient({
             </button>
           );
         })}
-        {inbox.conversations.length === 0 ? (
+        {emptyInbox ? (
           <p className="text-sm text-ash">No conversations yet. Message someone from the feed.</p>
         ) : null}
       </Card>
@@ -165,7 +261,16 @@ export function MessagingClient({
                         start(async () => {
                           await respondMessageRequest(r.id, "ACCEPTED");
                           notifyMessagesChanged();
-                          setInbox(await getMessagingInbox());
+                          const next = await getMessagingInbox();
+                          setInbox(next);
+                          const opened = next.conversations.find((c) =>
+                            c.participants.some((p) => p.user.id === r.from.id),
+                          );
+                          if (opened) {
+                            setSelectedOutgoingId(undefined);
+                            setSelectedId(opened.id);
+                            setThread(await getConversation(opened.id));
+                          }
                         })
                       }
                     >
@@ -239,47 +344,76 @@ export function MessagingClient({
           </Card>
         ) : null}
 
-        {toUserId && !inbox.conversations.some((c) =>
-          c.participants.some((p) => p.user.id === toUserId),
-        ) ? (
+        {selectedOutgoing ? (
           <Card className="border-ember/20 bg-gradient-to-br from-ember-soft/40 to-warm-white">
-            <h2 className="font-display text-xl">Start a conversation</h2>
-            <p className="mt-1 text-sm text-ash">
-              They’ll receive a request first. Attach context — then share your resume once they accept.
+            <div className="flex items-center gap-3">
+              <Avatar name={selectedOutgoing.to.name} image={selectedOutgoing.to.image} />
+              <div>
+                <p className="font-display text-xl text-coal">{selectedOutgoing.to.name}</p>
+                <p className="text-xs text-ash">
+                  {selectedOutgoing.to.profile?.jobTitle ?? "Fireplace member"}
+                </p>
+              </div>
+              <Badge tone="warning" className="ml-auto">
+                Awaiting reply
+              </Badge>
+            </div>
+            <p className="mt-4 rounded-2xl bg-warm-white/80 px-4 py-3 text-sm text-ash">
+              {selectedOutgoing.initialMessage}
             </p>
-            {requestSent ? (
-              <p className="mt-4 rounded-xl bg-success/10 px-3 py-2 text-sm font-medium text-success">
-                Request sent. You’ll chat here after they accept.
-              </p>
-            ) : (
-              <form
-                className="mt-4 space-y-3"
-                action={(fd) =>
-                  start(async () => {
-                    const res = await sendMessageRequest(fd);
-                    if (!res.ok) setError(res.error);
-                    else {
-                      setRequestSent(true);
-                      setError(undefined);
-                      notifyMessagesChanged();
-                    }
-                  })
-                }
-              >
-                <input type="hidden" name="toId" value={toUserId} />
-                <Textarea
-                  name="initialMessage"
-                  required
-                  placeholder="Hi — I saw your job post and I’m interested. Here’s a quick intro…"
-                />
-                {error ? <p className="text-sm text-danger">{error}</p> : null}
-                <Button disabled={pending}>Send message request</Button>
-              </form>
-            )}
+            <p className="mt-3 text-sm text-ash">
+              Request sent. You’ll chat here after they accept — this stays in your inbox as pending.
+            </p>
           </Card>
         ) : null}
 
-        {thread ? (
+        {showCompose ? (
+          <Card className="border-ember/20 bg-gradient-to-br from-ember-soft/40 to-warm-white">
+            <div className="flex items-center gap-3">
+              <Avatar name={toUserName ?? "Member"} image={toUserImage} />
+              <div>
+                <h2 className="font-display text-xl">{toUserName ?? "Start a conversation"}</h2>
+                <p className="text-sm text-ash">
+                  They’ll receive a request first. You’ll see them in your inbox as pending until they accept.
+                </p>
+              </div>
+            </div>
+            <form
+              className="mt-4 space-y-3"
+              action={(fd) =>
+                start(async () => {
+                  const res = await sendMessageRequest(fd);
+                  if (!res.ok) setError(res.error);
+                  else {
+                    setError(undefined);
+                    setRequestSent(true);
+                    setSelectedId(undefined);
+                    setThread(null);
+                    notifyMessagesChanged();
+                    const next = await getMessagingInbox();
+                    setInbox(next);
+                    const sent = next.outgoingRequests.find((r) => r.to.id === toUserId);
+                    if (sent) {
+                      setSelectedOutgoingId(sent.id);
+                      outgoingTargetRef.current = sent.to.id;
+                    }
+                  }
+                })
+              }
+            >
+              <input type="hidden" name="toId" value={toUserId} />
+              <Textarea
+                name="initialMessage"
+                required
+                placeholder="Hi — I saw your job post and I’m interested. Here’s a quick intro…"
+              />
+              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              <Button disabled={pending}>Send message request</Button>
+            </form>
+          </Card>
+        ) : null}
+
+        {thread && !selectedOutgoing && !showCompose ? (
           <Card className="flex min-h-[28rem] flex-col p-0">
             <div className="flex items-center justify-between gap-3 border-b border-smoke/20 px-5 py-4">
               <div className="flex items-center gap-3">
@@ -310,16 +444,83 @@ export function MessagingClient({
             <div className="flex-1 space-y-3 overflow-y-auto bg-parchment/50 px-4 py-4">
               {thread.messages.map((m) => {
                 const mine = m.senderId === currentUserId;
+                const editing = editingId === m.id;
                 return (
                   <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${
+                      className={`group max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${
                         mine
                           ? "rounded-br-md bg-ember text-warm-white"
                           : "rounded-bl-md bg-warm-white text-coal"
                       }`}
                     >
-                      {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
+                      {editing ? (
+                        <div className="flex min-w-60 items-center gap-2">
+                          <Input
+                            value={editBody}
+                            onChange={(event) => setEditBody(event.target.value)}
+                            maxLength={5000}
+                            autoFocus
+                            className="h-9 bg-warm-white text-coal"
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                setEditingId(undefined);
+                                setEditBody("");
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Save edited message"
+                            disabled={pending || !editBody.trim()}
+                            className="rounded-lg p-1.5 hover:bg-warm-white/15 disabled:opacity-40"
+                            onClick={() =>
+                              start(async () => {
+                                const res = await editMessage(m.id, editBody);
+                                if (!res.ok) {
+                                  setError(res.error);
+                                  return;
+                                }
+                                setError(undefined);
+                                setEditingId(undefined);
+                                setEditBody("");
+                                setThread(await getConversation(thread.id));
+                                notifyMessagesChanged();
+                              })
+                            }
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Cancel editing"
+                            className="rounded-lg p-1.5 hover:bg-warm-white/15"
+                            onClick={() => {
+                              setEditingId(undefined);
+                              setEditBody("");
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
+                          {mine ? (
+                            <button
+                              type="button"
+                              aria-label="Edit message"
+                              className="shrink-0 rounded-md p-1 opacity-60 transition hover:bg-warm-white/15 hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                              onClick={() => {
+                                setEditingId(m.id);
+                                setEditBody(m.body);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
                       {m.attachmentKey ? (
                         <a
                           href={`/api/files/${m.attachmentKey}`}
@@ -338,6 +539,8 @@ export function MessagingClient({
                       ) : null}
                       <p className={`mt-1 text-[10px] ${mine ? "text-warm-white/70" : "text-ash"}`}>
                         {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}
+                        {m.editedAt ? " · edited" : ""}
+                        {mine && m.id === lastOwnMessageId ? ` · ${m.readAt ? "Seen" : "Sent"}` : ""}
                       </p>
                     </div>
                   </div>
@@ -399,7 +602,7 @@ export function MessagingClient({
               {error ? <p className="text-sm text-danger">{error}</p> : null}
             </form>
           </Card>
-        ) : !toUserId ? (
+        ) : !toUserId && !selectedOutgoing && !thread ? (
           <Card className="flex min-h-72 items-center justify-center text-center">
             <div>
               <p className="font-display text-2xl text-coal">Pick a conversation</p>

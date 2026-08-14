@@ -155,6 +155,11 @@ export const sendMessageSchema = z.object({
   body: z.string().max(5000).optional().default(""),
 });
 
+export const editMessageSchema = z.object({
+  messageId: z.string().cuid(),
+  body: z.string().trim().min(1).max(5000),
+});
+
 export const reportSchema = z.object({
   targetType: z.enum(["USER", "POST", "COMMENT", "MESSAGE"]),
   targetId: z.string().min(1),

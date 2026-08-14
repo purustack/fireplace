@@ -2,7 +2,11 @@
 
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/rbac";
-import { messageRequestSchema, sendMessageSchema } from "@/lib/validations";
+import {
+  editMessageSchema,
+  messageRequestSchema,
+  sendMessageSchema,
+} from "@/lib/validations";
 import { rateLimit } from "@/lib/rate-limit";
 import { storeUpload } from "@/lib/storage";
 import type { ActionResult } from "./auth";
@@ -247,6 +251,39 @@ export async function sendMessage(formData: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
+export async function editMessage(
+  messageId: string,
+  body: string,
+): Promise<ActionResult> {
+  const user = await requireAuth();
+  const parsed = editMessageSchema.safeParse({ messageId, body });
+  if (!parsed.success) {
+    return { ok: false, error: "Message must be between 1 and 5,000 characters." };
+  }
+
+  const message = await prisma.message.findUnique({
+    where: { id: parsed.data.messageId },
+    select: { senderId: true, conversationId: true },
+  });
+  if (!message || message.senderId !== user.id) {
+    return { ok: false, error: "You can only edit your own messages." };
+  }
+
+  await prisma.$transaction([
+    prisma.message.update({
+      where: { id: parsed.data.messageId },
+      data: { body: parsed.data.body, editedAt: new Date() },
+    }),
+    prisma.conversation.update({
+      where: { id: message.conversationId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
+
+  revalidatePath("/app/messages");
+  return { ok: true };
+}
+
 export async function getUnreadMessageCount() {
   const user = await requireAuth();
   const [unreadMessages, pendingRequests, pendingContacts] = await Promise.all([
@@ -346,21 +383,21 @@ export async function blockUser(userId: string): Promise<ActionResult> {
 export async function getMessagingInbox() {
   const user = await requireAuth();
 
-  const [conversations, requests, contactRequests] = await Promise.all([
+  const personSelect = {
+    id: true,
+    name: true,
+    image: true,
+    profile: { select: { username: true, jobTitle: true } },
+  } as const;
+
+  const [conversations, requests, outgoingRequests, contactRequests] = await Promise.all([
     prisma.conversation.findMany({
       where: { participants: { some: { userId: user.id } } },
       orderBy: { updatedAt: "desc" },
       include: {
         participants: {
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-                profile: { select: { username: true, jobTitle: true } },
-              },
-            },
+            user: { select: personSelect },
           },
         },
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -376,9 +413,14 @@ export async function getMessagingInbox() {
     prisma.messageRequest.findMany({
       where: { toId: user.id, status: "PENDING" },
       include: {
-        from: {
-          select: { id: true, name: true, image: true, profile: { select: { username: true } } },
-        },
+        from: { select: personSelect },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.messageRequest.findMany({
+      where: { fromId: user.id, status: "PENDING" },
+      include: {
+        to: { select: personSelect },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -398,5 +440,5 @@ export async function getMessagingInbox() {
     }),
   ]);
 
-  return { conversations, requests, contactRequests };
+  return { conversations, requests, outgoingRequests, contactRequests };
 }

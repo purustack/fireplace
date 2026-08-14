@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { createLocalStorage } from "./local";
 import type { StorageAdapter, StoredFile } from "./types";
+import { prisma } from "@/lib/db";
 
 const ALLOWED_RESUME = new Set([
   "application/pdf",
@@ -16,7 +17,7 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const MAX_BYTES = Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024);
 
-function getAdapter(): StorageAdapter {
+function getLocalAdapter(): StorageAdapter {
   const driver = process.env.STORAGE_DRIVER ?? "local";
   // Vercel’s filesystem is ephemeral — use /tmp for MVP free hosting.
   const defaultPath = process.env.VERCEL
@@ -28,7 +29,53 @@ function getAdapter(): StorageAdapter {
   return createLocalStorage(process.env.STORAGE_LOCAL_PATH ?? defaultPath);
 }
 
-export const storage = getAdapter();
+const localStorage = getLocalAdapter();
+
+/**
+ * Keep a local cache for development, but persist the source of truth in
+ * Postgres so uploads survive serverless instance changes on Vercel.
+ */
+export const storage: StorageAdapter = {
+  async put(key, data, mimeType) {
+    const bytes = new Uint8Array(data.byteLength);
+    bytes.set(data);
+    await prisma.storedFileBlob.upsert({
+      where: { storageKey: key },
+      create: { storageKey: key, data: bytes, mimeType },
+      update: { data: bytes, mimeType },
+    });
+    await localStorage.put(key, data, mimeType);
+  },
+  async get(key) {
+    const cached = await localStorage.get(key);
+    if (cached) return cached;
+
+    const stored = await prisma.storedFileBlob.findUnique({
+      where: { storageKey: key },
+      select: { data: true },
+    });
+    if (!stored) return null;
+
+    const data = Buffer.from(stored.data);
+    await localStorage.put(key, data, "application/octet-stream");
+    return data;
+  },
+  async delete(key) {
+    await Promise.all([
+      localStorage.delete(key),
+      prisma.storedFileBlob.deleteMany({ where: { storageKey: key } }),
+    ]);
+  },
+  async exists(key) {
+    if (await localStorage.exists(key)) return true;
+    return Boolean(
+      await prisma.storedFileBlob.findUnique({
+        where: { storageKey: key },
+        select: { storageKey: true },
+      }),
+    );
+  },
+};
 
 export async function storeUpload(opts: {
   file: File;

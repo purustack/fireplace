@@ -19,10 +19,18 @@ export default async function MessagesPage({
       )
     : null;
 
-  const resume = await prisma.resume.findFirst({
-    where: { profile: { userId: session!.user.id } },
-    select: { id: true },
-  });
+  const [resume, recipient] = await Promise.all([
+    prisma.resume.findFirst({
+      where: { profile: { userId: session!.user.id } },
+      select: { id: true },
+    }),
+    params.to && !existing
+      ? prisma.user.findUnique({
+          where: { id: params.to },
+          select: { id: true, name: true, image: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -38,7 +46,9 @@ export default async function MessagesPage({
       </div>
       <MessagingClient
         inbox={inbox}
-        toUserId={existing ? undefined : params.to}
+        toUserId={existing ? undefined : recipient?.id}
+        toUserName={recipient?.name}
+        toUserImage={recipient?.image}
         initialConversationId={existing?.id ?? params.c}
         currentUserId={session!.user.id}
         hasResume={Boolean(resume)}
