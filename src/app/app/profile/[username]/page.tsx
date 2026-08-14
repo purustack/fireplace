@@ -7,6 +7,7 @@ import { AvailabilityBadge, Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { AvatarUploader } from "@/components/profile/avatar-uploader";
+import { ResumeManager } from "@/components/profile/resume-manager";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { hasLayoffVerifiedBadge } from "@/lib/verification-badge";
@@ -137,15 +138,9 @@ export default async function ProfilePage({
         </Card>
       ) : null}
 
-      {profile.resume && isOwner ? (
+      {isOwner ? (
         <Card>
-          <h2 className="font-display text-xl">Resume</h2>
-          <a
-            className="mt-3 inline-block text-sm font-semibold text-ember"
-            href={`/api/files/${profile.resume.storageKey}`}
-          >
-            View resume ({profile.resume.fileName})
-          </a>
+          <ResumeManager resume={profile.resume} />
         </Card>
       ) : null}
 

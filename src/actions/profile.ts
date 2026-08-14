@@ -234,7 +234,12 @@ export async function uploadResume(formData: FormData): Promise<ActionResult> {
       kind: "resume",
     });
 
-    const profile = await prisma.profile.findUniqueOrThrow({ where: { userId: user.id } });
+    const profile = await prisma.profile.findUniqueOrThrow({
+      where: { userId: user.id },
+      include: { resume: true },
+    });
+    const previousKey = profile.resume?.storageKey;
+
     await prisma.resume.upsert({
       where: { profileId: profile.id },
       create: {
@@ -253,16 +258,52 @@ export async function uploadResume(formData: FormData): Promise<ActionResult> {
       },
     });
 
-    await prisma.profile.update({
-      where: { userId: user.id },
-      data: { profileCompleteness: { increment: 10 } },
-    });
+    if (previousKey && previousKey !== stored.storageKey) {
+      await storage.delete(previousKey);
+    }
+
+    if (!profile.resume) {
+      await prisma.profile.update({
+        where: { userId: user.id },
+        data: { profileCompleteness: { increment: 10 } },
+      });
+    }
 
     revalidatePath("/app/profile");
+    revalidatePath("/app/settings");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed." };
   }
+}
+
+export async function removeResume(): Promise<ActionResult> {
+  const user = await requireAuth();
+  const profile = await prisma.profile.findUniqueOrThrow({
+    where: { userId: user.id },
+    include: { resume: true },
+  });
+  if (!profile.resume) return { ok: false, error: "No resume to remove." };
+
+  const sharedInChat = await prisma.message.findFirst({
+    where: { attachmentKey: profile.resume.storageKey },
+    select: { id: true },
+  });
+
+  await prisma.resume.delete({ where: { profileId: profile.id } });
+
+  // Messages keep their own copy of the link, so only drop the blob when it
+  // was never shared in a conversation.
+  if (!sharedInChat) await storage.delete(profile.resume.storageKey);
+
+  await prisma.profile.update({
+    where: { userId: user.id },
+    data: { profileCompleteness: { decrement: 10 } },
+  });
+
+  revalidatePath("/app/profile");
+  revalidatePath("/app/settings");
+  return { ok: true };
 }
 
 function avatarKeyFromUrl(image: string | null | undefined) {

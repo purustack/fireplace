@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { updatePrivacySettings } from "@/actions/profile";
 import { AvatarUploader } from "@/components/profile/avatar-uploader";
+import { ResumeManager } from "@/components/profile/resume-manager";
 import { LayoffSurveyForm } from "@/components/onboarding/layoff-survey-form";
 import { isLayoffSurveyAnswers } from "@/lib/layoff-survey";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,7 @@ export default async function SettingsPage() {
   const session = await auth();
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: session!.user.id },
-    include: { profile: true },
+    include: { profile: { include: { resume: true } } },
   });
   const rawSurvey = user.profile?.layoffSurvey;
   const survey = isLayoffSurveyAnswers(rawSurvey) ? rawSurvey : null;
@@ -31,6 +32,10 @@ export default async function SettingsPage() {
 
       <Card>
         <AvatarUploader name={user.name} image={user.image} />
+      </Card>
+
+      <Card>
+        <ResumeManager resume={user.profile?.resume ?? null} />
       </Card>
 
       <Card>
