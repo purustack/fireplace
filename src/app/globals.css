@@ -2,22 +2,22 @@
 
 :root {
   /*
-   * A quiet, restorative palette: eucalyptus for reassurance, soft sage
-   * surfaces, and a little warm sand so Fireplace still feels human.
+   * A quiet palette: dusk blue for steadiness, warm sand surfaces so it
+   * still feels human, and muted accents that never shout.
    */
-  --ember: #55796f;
-  --ember-deep: #345a52;
-  --ember-soft: #e3eeea;
-  --coal: #24312f;
-  --ash: #5c6b67;
-  --smoke: #a5b2ae;
-  --parchment: #f3f6f3;
-  --parchment-deep: #e6ece8;
-  --warm-white: #fcfdfb;
-  --success: #3f735e;
-  --warning: #a66f3f;
-  --danger: #a64f50;
-  --ring: #55796f;
+  --ember: #5a6f92;
+  --ember-deep: #3d5271;
+  --ember-soft: #e7ebf3;
+  --coal: #262a33;
+  --ash: #5d6270;
+  --smoke: #aeb2bd;
+  --parchment: #f5f4f2;
+  --parchment-deep: #eae7e3;
+  --warm-white: #fdfcfa;
+  --success: #3d6a8a;
+  --warning: #a8763f;
+  --danger: #a85453;
+  --ring: #5a6f92;
   --radius: 1rem;
   --font-display: "Fraunces", Georgia, serif;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
@@ -79,16 +79,16 @@
 @layer utilities {
   .bg-hearth {
     background:
-      radial-gradient(ellipse 90% 55% at 50% -15%, rgba(85, 121, 111, 0.2), transparent 58%),
-      radial-gradient(ellipse 50% 40% at 100% 0%, rgba(188, 159, 121, 0.12), transparent 50%),
-      linear-gradient(180deg, #fbfdfb 0%, var(--parchment) 42%, var(--parchment-deep) 100%);
+      radial-gradient(ellipse 90% 55% at 50% -15%, rgba(90, 111, 146, 0.18), transparent 58%),
+      radial-gradient(ellipse 50% 40% at 100% 0%, rgba(196, 168, 133, 0.12), transparent 50%),
+      linear-gradient(180deg, #fdfcfa 0%, var(--parchment) 42%, var(--parchment-deep) 100%);
   }
 
   .bg-embers {
     background:
-      radial-gradient(circle at 12% 0%, rgba(85, 121, 111, 0.13), transparent 38%),
-      radial-gradient(circle at 92% 8%, rgba(227, 238, 234, 0.92), transparent 42%),
-      linear-gradient(180deg, #fcfdfb 0%, var(--parchment) 100%);
+      radial-gradient(circle at 12% 0%, rgba(90, 111, 146, 0.12), transparent 38%),
+      radial-gradient(circle at 92% 8%, rgba(231, 235, 243, 0.92), transparent 42%),
+      linear-gradient(180deg, #fdfcfa 0%, var(--parchment) 100%);
   }
 
   .text-balance {
@@ -131,9 +131,9 @@
 @keyframes glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(85, 121, 111, 0);
+    box-shadow: 0 0 0 0 rgba(90, 111, 146, 0);
   }
   50% {
-    box-shadow: 0 0 36px 4px rgba(85, 121, 111, 0.18);
+    box-shadow: 0 0 36px 4px rgba(90, 111, 146, 0.18);
   }
 }
