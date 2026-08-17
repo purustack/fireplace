@@ -91,6 +91,33 @@
       linear-gradient(180deg, #fdfcfa 0%, var(--parchment) 100%);
   }
 
+  .scroll-soft {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--smoke) 70%, transparent) transparent;
+    overscroll-behavior: contain;
+  }
+
+  .scroll-soft::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scroll-soft::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-soft::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--smoke) 55%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .scroll-soft::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--ember) 45%, transparent);
+    background-clip: content-box;
+  }
+
   .text-balance {
     text-wrap: balance;
   }

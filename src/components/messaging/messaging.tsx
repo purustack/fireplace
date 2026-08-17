@@ -55,7 +55,7 @@ export function MessagingClient({
   const [error, setError] = useState<string>();
   const [editingId, setEditingId] = useState<string>();
   const [editBody, setEditBody] = useState("");
-  const threadEndRef = useRef<HTMLDivElement>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
   const lastMessageId = thread?.messages.at(-1)?.id;
   const inboxStampRef = useRef<string>("");
   const outgoingTargetRef = useRef<string | undefined>(undefined);
@@ -164,8 +164,11 @@ export function MessagingClient({
     };
   }, [selectedId, selectedOutgoingId, composingNew]);
 
+  // Scroll the thread pane itself so a new message never yanks the whole page.
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const pane = threadScrollRef.current;
+    if (!pane) return;
+    pane.scrollTo({ top: pane.scrollHeight, behavior: "smooth" });
   }, [lastMessageId]);
 
   const other = thread?.participants.find((p) => p.user.id !== currentUserId)?.user;
@@ -178,7 +181,7 @@ export function MessagingClient({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-      <Card className="space-y-3 lg:max-h-[70vh] lg:overflow-y-auto">
+      <Card className="scroll-soft space-y-3 lg:max-h-[70vh] lg:overflow-y-auto">
         <h2 className="font-display text-lg">Inbox</h2>
         {inbox.outgoingRequests.map((r) => {
           const active = selectedOutgoing?.id === r.id;
@@ -414,7 +417,7 @@ export function MessagingClient({
         ) : null}
 
         {thread && !selectedOutgoing && !showCompose ? (
-          <Card className="flex min-h-[28rem] flex-col p-0">
+          <Card className="flex h-[70vh] max-h-[46rem] min-h-[28rem] flex-col overflow-hidden p-0">
             <div className="flex items-center justify-between gap-3 border-b border-smoke/20 px-5 py-4">
               <div className="flex items-center gap-3">
                 <Avatar name={other?.name ?? "Member"} image={other?.image} />
@@ -441,7 +444,10 @@ export function MessagingClient({
               ) : null}
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto bg-parchment/50 px-4 py-4">
+            <div
+              ref={threadScrollRef}
+              className="scroll-soft min-h-0 flex-1 space-y-3 overflow-y-auto bg-parchment/50 px-4 py-4"
+            >
               {thread.messages.map((m) => {
                 const mine = m.senderId === currentUserId;
                 const editing = editingId === m.id;
@@ -546,7 +552,6 @@ export function MessagingClient({
                   </div>
                 );
               })}
-              <div ref={threadEndRef} />
             </div>
 
             <form
